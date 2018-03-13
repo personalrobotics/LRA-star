@@ -9,7 +9,7 @@ Dependencies:
 4. Boost Graph Library
 
 The CMakeLists.txt file supports catkin tools. Once you have created and initialized your workspace, 
-you should be able to build the package by running `catkin build LRAstar`.
+you should be able to build the package by running `catkin build LRA-star`.
 
 LRAstar has been implemented as an OMPL planner and can be invoked on a `RealVectorStateSpace`.
 The planner returns the shortest path on the roadmap graph it is planning on.
@@ -18,7 +18,7 @@ The planner returns the shortest path on the roadmap graph it is planning on.
 
 Example:
 
-To run an example script, build the package. The executable should be within the devel/lib/LRAstar folder
+To run an example script, build the package. The executable should be within the devel/lib/LRA-star folder
 of your catkin workspace.
 
 The planner expects the following:
@@ -29,7 +29,7 @@ The planner expects the following:
 5. The lookahead [optional; default = 1]
 6. The greediness [optional; default = 1]
 
-The example script has been set up. It generates an executable `example2D` in the devel/lib/LRAstar folder.
+The example script has been set up. It generates an executable `example2D` in the devel/lib/LRA-star folder.
 
 To run the planner: [from the catkin workspace]
 
