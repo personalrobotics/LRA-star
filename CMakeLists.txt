@@ -31,7 +31,12 @@ link_libraries(
 )
 
 add_library(${PROJECT_NAME}
-  src/LRAstar.cpp
+#  src/LRAstar.cpp
+  src/utils/BisectPerm.cpp
+  src/utils/CollisionStatus.cpp
+  src/utils/NodeStructure.cpp
+  src/utils/RoadmapFromFile.cpp
+  src/utils/StateWrapper.cpp
 )
 
 install(TARGETS ${PROJECT_NAME}

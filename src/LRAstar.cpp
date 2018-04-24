@@ -1,3 +1,5 @@
+#include "LRAstar.hpp"
+
 #include <algorithm>        // std::reverse
 #include <cmath>            // pow, sqrt
 #include <iostream>         // std::cerr
@@ -7,8 +9,6 @@
 #include <fstream>          // Write to file
 #include <assert.h>         // Debug
 #include <chrono>           // record rewireTime 
-
-#include "LRAstar.hpp"
 
 namespace LRAstar
 {
