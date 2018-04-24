@@ -43,3 +43,8 @@ install(TARGETS ${PROJECT_NAME}
 # For example scripts
 add_executable(example2D scripts/example2D.cpp)
 target_link_libraries(example2D ${PROJECT_NAME})
+
+# This custom target doesn't affect building the project but is only for
+# displaying the header files in IDEs.
+FILE(GLOB_RECURSE LibFiles "include/*.hpp")
+add_custom_target(headers SOURCES ${LibFiles})
