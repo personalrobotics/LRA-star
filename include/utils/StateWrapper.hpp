@@ -3,6 +3,9 @@
 
 #include <ompl/base/StateSpace.h>
 
+namespace LRAstar {
+namespace utils {
+
 struct StateWrapper
 {
   StateWrapper() {}
@@ -14,5 +17,8 @@ struct StateWrapper
   ompl::base::State *state;
 };
 typedef boost::shared_ptr<StateWrapper> StateWrapperPtr;
+
+} // namespace utils
+} // namespace LRAstar
 
 #endif // STATE_WRAPPER_H_

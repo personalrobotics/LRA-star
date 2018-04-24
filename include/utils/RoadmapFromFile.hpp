@@ -22,6 +22,7 @@
 #include "CollisionStatus.hpp"
 
 namespace LRAstar {
+namespace utils {
 
 /* RoadmapFromFilePutStateMap */
 //! The map used to decode the .graphml file and populate the vertex states
@@ -166,6 +167,7 @@ class RoadmapFromFile
     const ompl::base::StateSpacePtr mSpace;
 };
 
+} // namespace utils
 } // namespace LRAstar
 
 #endif // UTIL_ROADMAPFROMFILE_HPP_
