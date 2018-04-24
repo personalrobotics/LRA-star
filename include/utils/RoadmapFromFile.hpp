@@ -19,8 +19,6 @@
 #include <ompl/base/StateSpace.h>
 #include <ompl/base/spaces/RealVectorStateSpace.h>
 
-#include "CollisionStatus.hpp"
-
 namespace LRAstar {
 namespace utils {
 
@@ -32,10 +30,7 @@ template <class PropMap, class StateWrapper>
 class RoadmapFromFilePutStateMap
 {
 public:
-  typedef boost::writable_property_map_tag category;
   typedef typename boost::property_traits<PropMap>::key_type key_type;
-  typedef std::string value_type;
-  typedef std::string reference;
 
   const PropMap mPropMap;
   ompl::base::StateSpacePtr mSpace;
@@ -82,10 +77,7 @@ template <class PropMap>
 class RoadmapFromFilePutEdgeLengthMap
 {
 public:
-  typedef boost::writable_property_map_tag category;
   typedef typename boost::property_traits<PropMap>::key_type key_type;
-  typedef std::string value_type;
-  typedef std::string reference;
   const PropMap mPropMap;
 
   RoadmapFromFilePutEdgeLengthMap(PropMap _propMap):
