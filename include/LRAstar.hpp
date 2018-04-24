@@ -37,14 +37,24 @@ namespace LRAstar {
       /// The underlying state of the vertex
       StateWrapperPtr v_state;
 
-      /// Collision status of the vertex
-      CollisionStatus vertexStatus;
+      /// Cost-to-Come
+      double cost;
+
+      /// Estimate Cost-to-Come
+      double lazyCost;
+
+      /// Budget
+      double budget;
+
+      /// Parent
+      std::size_t parent;
+
+      /// Children
+      std::vector<std::size_t> children;
 
       /// Flag to check if vertex is within the lazyband
-      bool visited;
+      bool inLazyBand;
 
-      /// Node Structure associated with vertex
-      NodeEntry<size_t> node;
     }; // struct VProp
 
     struct EProp
@@ -52,11 +62,11 @@ namespace LRAstar {
       /// The length of the edge using the space distance metric
       double length;
 
-      /// Collision status of the edge
-      CollisionStatus edgeStatus;
+      /// Flag to check if edge is evaluated
+      bool isEvaluated;
 
       /// States embedded in an edge
-      std::vector< StateWrapperPtr > edgeStates;
+      std::vector<StateWrapperPtr> edgeStates;
 
     }; // struct EProp
 
@@ -72,15 +82,10 @@ namespace LRAstar {
     // Vertex Maps
     typedef boost::property_map<Graph, boost::vertex_index_t VProp::*>::type VertexIndexMap;
     typedef boost::property_map<Graph, StateWrapperPtr VProp::*>::type VPStateMap;
-    typedef boost::property_map<Graph, CollisionStatus VProp::*>::type VPStatusMap;
-    typedef boost::property_map<Graph, bool VProp::*>::type VPVisitedMap;
-    typedef boost::property_map<Graph, NodeEntry<Vertex> VProp::*>::type VPVertexNodeMap;
 
     // Edge Maps
     typedef boost::property_map<Graph, boost::edge_index_t EProp::*>::type EdgeIndexMap;
-    typedef boost::property_map<Graph, CollisionStatus EProp::*>::type EPStatusMap;
     typedef boost::property_map<Graph, double EProp::*>::type EPLengthMap;
-
 
     // Algorithmic type definition
     struct HashFunction
@@ -91,8 +96,7 @@ namespace LRAstar {
       }
     };
 
-    typedef NodeEntry<Vertex> Node;
-    typedef std::unordered_set< Vertex, HashFunction > unorderedSet;
+    typedef std::unordered_set<Vertex, HashFunction> unorderedSet;
 
     /// The pointer to the OMPL state space
     const ompl::base::StateSpacePtr mSpace;
