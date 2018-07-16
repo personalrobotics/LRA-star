@@ -5,17 +5,17 @@ namespace utils {
 
 BisectPerm::BisectPerm()
 {
-  // Do nothing
+  // Do nothing.
 }
 
 BisectPerm::~BisectPerm()
 {
-  // Do nothing
+  // Do nothing.
 }
 
-const std::vector<std::pair<int,int>>& BisectPerm::get(int n)
+const std::vector<std::pair<int, int>>& BisectPerm::get(int n)
 {
-  std::map<int, const std::vector< std::pair<int,int> > >::iterator it;
+  std::map<int, const std::vector<std::pair<int,int>>>::iterator it;
   it = mCache.find(n);
   if (it != mCache.end())
     return it->second;
@@ -24,7 +24,7 @@ const std::vector<std::pair<int,int>>& BisectPerm::get(int n)
   int last_true;
   int max_i;
   int max_val;
-  std::vector< std::pair<int,int> > perm;
+  std::vector<std::pair<int,int>> perm;
   std::vector<bool> done(n, false);
   std::vector<int> dist(n);
 
