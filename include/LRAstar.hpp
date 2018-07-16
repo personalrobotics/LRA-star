@@ -1,17 +1,57 @@
+/*********************************************************************
+* Software License Agreement (BSD License)
+*
+*  Copyright (c) 2018, University of Washington
+*  All rights reserved.
+*
+*  Redistribution and use in source and binary forms, with or without
+*  modification, are permitted provided that the following conditions
+*  are met:
+*
+*   * Redistributions of source code must retain the above copyright
+*     notice, this list of conditions and the following disclaimer.
+*   * Redistributions in binary form must reproduce the above
+*     copyright notice, this list of conditions and the following
+*     disclaimer in the documentation and/or other materials provided
+*     with the distribution.
+*   * Neither the name of the University of Washington nor the names
+*     of its contributors may be used to endorse or promote products
+*     derived from this software without specific prior written
+*     permission.
+*
+*  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+*  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+*  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+*  FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+*  COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+*  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+*  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+*  LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+*  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+*  LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+*  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+*  POSSIBILITY OF SUCH DAMAGE.
+*********************************************************************/
+
+/* Authors: Aditya Vamsikrishna Mandalika */
+
 #ifndef LRASTAR_HPP_
 #define LRASTAR_HPP_
 
+// STL headers
 #include <vector>
 #include <string> 
 #include <unordered_set>
 #include <queue>
 #include <exception>
 
+// Boost headers
 #include <boost/graph/adjacency_list.hpp>
 #include <boost/graph/properties.hpp>
 #include <boost/graph/reverse_graph.hpp>
 #include <boost/property_map/dynamic_property_map.hpp>
 
+// OMPL headers
 #include <ompl/base/Planner.h>
 #include <ompl/base/StateSpace.h>
 #include <ompl/base/ScopedState.h>
@@ -21,6 +61,7 @@
 #include <ompl/datastructures/NearestNeighbors.h>
 #include <ompl/datastructures/NearestNeighborsGNAT.h>
 
+// LRAstar defined headers
 #include "util.hpp"
 
 namespace LRAstar {
@@ -28,18 +69,15 @@ namespace LRAstar {
 /// The OMPL Planner class that implements the algorithm
 class LRAstar: public ompl::base::Planner
 {
-
 public:
-
   /// Constructor
   /// \param[in] si The OMPL space information manager
   explicit LRAstar(const ompl::base::SpaceInformationPtr &si);
 
-  /// Constructor
   /// \param[in] si The OMPL space information manager
-  /// \param[in] _roadmapFileName The path to the .graphml file that encodes the roadmap
-  /// \param[in] _lookahead The lazy lookahead that defines the horizon
-  /// \param[in] _greediness The greediness to evaluate lazy shortest paths
+  /// \param[in] roadmapFileName The path to the .graphml file that encodes the roadmap.
+  /// \param[in] lookahead The lazy lookahead that defines the horizon. Default is 1.
+  /// \param[in] greediness The greediness to evaluate lazy shortest paths. Default is 1.
   LRAstar(const ompl::base::SpaceInformationPtr &si,
           const std::string& roadmapFileName,
           double lookahead,
@@ -48,20 +86,24 @@ public:
   /// Destructor
   ~LRAstar(void);
 
-  // Properties associated with each roadmap vertex
+  ///////////////////////////////////////////////////////////////////
+
+  ///////////////////////////////////////////////////////////////////
+
+  // Properties associated with each roadmap vertex.
   struct VProp
   {
     /// The underlying state of the vertex
-    StateWrapperPtr v_state;
+    utils::StateWrapperPtr state;
 
     /// Cost-to-Come
-    double cost;
+    double costToCome;
 
     /// Estimate Cost-to-Come
-    double lazyCost;
+    double lazyCostToCome;
 
     /// Budget
-    double budget;
+    double budgetToExtend;
 
     /// Parent
     std::size_t parent;
@@ -72,8 +114,12 @@ public:
     /// Flag to check if vertex is within the lazyband
     bool inLazyBand;
 
+    /// Visited TODO(avk): Needed?
+    bool visited;
+
   }; // struct VProp
 
+  // Properties associated with each roadmap edge.
   struct EProp
   {
     /// The length of the edge using the space distance metric
@@ -83,28 +129,46 @@ public:
     bool isEvaluated;
 
     /// States embedded in an edge
-    std::vector<StateWrapperPtr> edgeStates;
+    std::vector<utils::StateWrapperPtr> edgeStates;
 
   }; // struct EProp
 
-  // Graph definitions
+  ///////////////////////////////////////////////////////////////////
+
+  ///////////////////////////////////////////////////////////////////
+
+  // Helpful alias declarations
+  /// Undirected Boost graph
   typedef boost::adjacency_list<boost::vecS, boost::vecS, boost::undirectedS, VProp, EProp> Graph;
+
+  /// Boost vertex
   typedef boost::graph_traits<Graph>::vertex_descriptor Vertex;
+
+  /// Boost vertex iterator
   typedef boost::graph_traits<Graph>::vertex_iterator VertexIter;
+
+  /// Boost edge
   typedef boost::graph_traits<Graph>::edge_descriptor Edge;
+
+  /// Boost edge iterator
   typedef boost::graph_traits<Graph>::edge_iterator EdgeIter;
+
+  /// Boost graph neighbor iterator
   typedef boost::graph_traits<Graph>::adjacency_iterator NeighborIter;
 
-  // Boost Graph Property Map definitions
-  // Vertex Maps
+  /// Map each vertex to a unique ID
   typedef boost::property_map<Graph, boost::vertex_index_t VProp::*>::type VertexIndexMap;
-  typedef boost::property_map<Graph, StateWrapperPtr VProp::*>::type VPStateMap;
 
-  // Edge Maps
+  /// Map each vertex to the underlying state [read from the graphml file]
+  typedef boost::property_map<Graph, utils::StateWrapperPtr VProp::*>::type VPStateMap;
+
+  /// Map each edge to a unique ID
   typedef boost::property_map<Graph, boost::edge_index_t EProp::*>::type EdgeIndexMap;
+
+  /// Map each edge to its length
   typedef boost::property_map<Graph, double EProp::*>::type EPLengthMap;
 
-  // Algorithmic type definition
+  /// Unordered set of graph vertices to track the lazy band.
   struct HashFunction
   {
     std::size_t operator()(const Vertex& v) const
@@ -112,51 +176,148 @@ public:
       return v;
     }
   };
-
   typedef std::unordered_set<Vertex, HashFunction> unorderedSet;
 
-  /// The pointer to the OMPL state space
-  const ompl::base::StateSpacePtr mSpace;
+  ///////////////////////////////////////////////////////////////////
 
-  /// The fixed roadmpa over which the search is done
-  Graph g;
+  ///////////////////////////////////////////////////////////////////
 
   // Setters and Getters
-  /// Set/Get Value of Lazy Lookahead
-  void setLookahead(double _lookahead);
+  /// Set value of lazy lookahead.
+  void setLookahead(double lookahead);
+
+  /// Set value of greediness.
+  void setGreediness(double greediness);
+
+  /// Set roadmap information.
+  void setRoadmapFileName(const std::string& roadmapFileName);
+
+  /// Set connection radius
+  void setConnectionRadius(double connectionRadius);
+
+  /// Get value of lazy lookahead.
   double getLookahead() const;
-  /// Set/Get Value of Greediness
-  void setGreediness(double _greediness);
+
+  /// Get value of greediness
   double getGreediness() const;
-  /// Set/Get Value of Connection Radius
-  void setConnectionRadius(double _connectionRadius);
-  double getConnectionRadius() const;
-  /// Get ID of start vertex
-  Vertex getStartVertex() const;
-  /// Get ID of goal vertex
-  Vertex getGoalVertex() const;
-  /// Get the shortest path cost
-  double getBestPathCost() const;
-  /// Set/Get Roadmap Information
-  void setRoadmapFileName(const std::string& _roadmapFileName);
+
+  /// Get roadmap information.
   std::string getRoadmapFileName() const;
 
-  // Internal Evaluation Methods
-  /// Number of edges evaluated thus far
-  inline unsigned int getNumEdgeEvals(){ return mNumEdgeEvals;}
-  /// Number of calls to collision checker made thus far
-  inline unsigned int getNumEdgeRewires(){ return mNumEdgeRewires;}
-  /// Total time spent doing searches
-  inline double getSearchTime(){ return mSearchTime;}
-  /// Total time spent doing collision checks
-  inline double getCollCheckTime(){return mCollCheckTime;}
+  /// Get connection radius used to generate the graph.
+  double getConnectionRadius() const;
+
+  /// Get ID of start vertex.
+  Vertex getStartVertex() const;
+
+  /// Get ID of goal vertex.
+  Vertex getGoalVertex() const;
+
+  /// Get the shortest path cost.
+  double getBestPathCost() const;
+
+  ///////////////////////////////////////////////////////////////////
+
+  ///////////////////////////////////////////////////////////////////
+
+  // Internal evaluation methods
+  /// Number of edges evaluated thus far.
+  std::size_t getNumEdgeEvals() const;
+
+  /// Number of edges rewired thus far.
+  std::size_t getNumEdgeRewires() const;
+
+  /// Total time spent searching for paths.
+  double getSearchTime() const;
+
+  /// Total time spent doing collision checks.
+  double getCollisionCheckTime() const;
+
+  ///////////////////////////////////////////////////////////////////
+
+  ///////////////////////////////////////////////////////////////////
 
   // OMPL required methods
+  /// Set the problem definition and define the start, goal.
   void setProblemDefinition(const ompl::base::ProblemDefinitionPtr &pdef);
-  ompl::base::PlannerStatus solve(const ompl::base::PlannerTerminationCondition &ptc);
-  void setup();
-  ompl::base::PathPtr constructSolution(const Vertex &start, const Vertex &goal);
 
+  /// Solve the planning problem.
+  ompl::base::PlannerStatus solve(const ompl::base::PlannerTerminationCondition &ptc);
+
+  /// Setup the planner.
+  void setup() override;
+
+  /// Clear the planner setup.
+  void clear() override;
+
+private:
+  // Planner parameters
+  /// The pointer to the OMPL state space.
+  const ompl::base::StateSpacePtr mSpace;
+
+  /// The fixed roadmap over which the search is done.
+  Graph graph;
+
+  /// Roadmap
+  boost::shared_ptr<utils::RoadmapFromFile<Graph, VPStateMap, utils::StateWrapper, EPLengthMap>> roadmapPtr;
+
+  /// Lookahead.
+  double mLookahead;
+
+  /// Greediness.
+  double mGreediness;
+
+  /// Path to the roadmap.
+  std::string mRoadmapFileName;
+
+  /// Connection Radius [Strategy].
+  double mConnectionRadius;
+
+  /// Resolution to evaluate edges.
+  double mCheckRadius;
+
+  ///////////////////////////////////////////////////////////////////
+
+  ///////////////////////////////////////////////////////////////////
+
+  // Internal evaluation variables
+  /// Number of edges evaluated.
+  std::size_t mNumEdgeEvals{0u};
+
+  /// Number of edges rewired.
+  std::size_t mNumEdgeRewires{0u};
+
+  /// Time spent in search.
+  double mSearchTime{0.0};
+
+  /// Time spent on collision checking.
+  double mCollisionCheckTime{0.0};
+
+  /// Cost of optimal path.
+  double mBestPathCost{std::numeric_limits<double>::infinity()};
+
+  ///////////////////////////////////////////////////////////////////
+
+  ///////////////////////////////////////////////////////////////////
+
+  // Planner helpers
+  /// Source vertex.
+  Vertex mStartVertex;
+
+  /// Goal vertex.
+  Vertex mGoalVertex;
+
+  /// Set of vertices to be rewired.
+  unorderedSet mSetRewire;
+
+  /// Edge evaluation resolution manager.
+  utils::BisectPerm mBisectPermObj;
+
+  ///////////////////////////////////////////////////////////////////
+
+  ///////////////////////////////////////////////////////////////////
+
+  // Supplementary Functions
   /// Given a new edge, initialize the embedded configurations
   /// along the edge using the resolution of the underlying space.
   /// This is called during problem setup.
@@ -169,86 +330,65 @@ public:
   /// \return True if edge is valid
   bool evaluateEdge(const Edge& e);
 
-  /// Roadmap
-  boost::shared_ptr<RoadmapFromFile<Graph, VPStateMap, StateWrapper, EPLengthMap>> roadmapPtr;
+  /// Returns g-value of vertex.
+  /// \param[in] vertex Vertex
+  double estimateCostToCome(Vertex vertex) const;
 
-private:
-  // Planner helpers
-  /// Source
-  Vertex mStartVertex;
+  /// Returns heursitic value of vertex.
+  /// \param[in] vertex Vertex
+  double heuristicFunction(Vertex vertex) const;
 
-  /// Target
-  Vertex mGoalVertex;
+  /// Returns f-value of vertex.
+  /// \param vertex Vertex
+  double estimateTotalCost(Vertex vertex) const;
 
-  /// Set of rewired vertices
-  unorderedSet mSetRewire;
+  /// Returns the path from leaf vertex to border vertex.
+  /// \param[in] vertex Vertex on the frontier
+  std::vector<Vertex> pathToBorder(Vertex vertex) const;
 
-  /// Edge evaluation resolution manager
-  BisectPerm mBisectPermObj;
+  /// Construct the solution.
+  /// \param[in] start Start vertex
+  /// \param[in] goal Goal vertex
+  ompl::base::PathPtr constructSolution(const Vertex& start, const Vertex& goal) const;
 
-  // Planner parameters
-  /// Lookahead
-  double mLookahead;
+  ///////////////////////////////////////////////////////////////////
 
-  /// Greediness
-  double mGreediness;
-
-  /// Connection Radius [Strategy]
-  double mConnectionRadius;
-
-  /// Cost of optimal path
-  double mBestPathCost;
-
-  /// Resolution to evaluate edges
-  double mCheckRadius;
-
-  /// Path to the roadmap
-  std::string mRoadmapFileName;
-
-  // Supplementary Functions
-  /// Find the path from leaf vertex to border vertex
-  /// \param[in] _vertex Vertex on the frontier
-  std::vector<Vertex> pathToBorder(Vertex _vertex);
-  /// G-value of vertex
-  /// \param[in] _vertex Vertex
-  double estimateCostToCome(Vertex _vertex);
-  /// Heursitic Function of vertex
-  /// \param[in] _vertex Vertex
-  double heuristicFunction(Vertex _vertex);
-  /// F-value of vertex
-  /// \param _vertex Vertex
-  double estimateTotalCost(Vertex _vertex);
+  ///////////////////////////////////////////////////////////////////
 
   // Main Algorithm Functions
-  /// Extend the Lazy Band
+  /// Extend the lazy band.
   /// param[t]  queue with custom comparator
   /// param[in] qExtend priority queue of vertices to extend
   /// param[in] qFrontier priority queue of leaf vertices
   template<class TF>
   void extendLazyBand(TF &qExtend, TF &qFrontier);
-  /// Update the Lazy Band
+
+  /// Update the lazy band.
   /// param[t]  queue with custom comparator
   /// param[in] qUpdate priority queue of vertices to update
   /// param[in] qExtend priority queue of vertices to extend
   /// param[in] qFrontier priority queue of leaf vertices
   template<class TG, class TF>
   void updateLazyBand(TG &qUpdate, TF &qExtend, TF &qFrontier);
-  /// Rewire the Lazy Band if Collision Encountered
+
+  /// Rewire the lazy band if a collision has occured.
   /// param[t]  queue with custom comparator
   /// param[in] qExtend priority queue of vertices to rewire
   /// param[in] qExtend priority queue of vertices to extend
   /// param[in] qFrontier priority queue of leaf vertices
   template<class TG, class TF>
   void rewireLazyBand(TG &qRewire, TF &qExtend, TF &qFrontier);
-  /// Extend the Lazy Band
-  /// param[t] TG queue with custom comparator
-  /// param[in] pathTail sequence of edges to evaluate
-  /// param[in] qExtend priority queue of vertices to update
-  /// param[in] qExtend priority queue of vertices to rewire
-  /// param[in] qExtend priority queue of vertices to extend
-  /// param[in] qFrontier priority queue of leaf vertices
+
+  /// Evaluate edges along given path.
+  /// param[t] TG Queue with custom comparator
+  /// param[t] TF Queue with custom comparator
+  /// param[in] path Sequence of vertices along the path.
+  /// param[in] qUpdate Priority queue of vertices to update
+  /// param[in] qRewire Priority queue of vertices to rewire
+  /// param[in] qExtend Priority queue of vertices to extend
+  /// param[in] qFrontier Priority queue of leaf vertices
   template<class TG, class TF>
-  bool evaluatePath(std::vector<Vertex> pathTail, TG &qUpdate, TG &qRewire, TF &qExtend, TF &qFrontier);
+  bool evaluatePath(std::vector<Vertex> path, TG &qUpdate, TG &qRewire, TF &qExtend, TF &qFrontier);
 
 }; // class LRAstar
 
