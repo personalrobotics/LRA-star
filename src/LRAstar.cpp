@@ -749,9 +749,9 @@ void LRAstar::rewireLazyBand(TG &qRewire, TF &qExtend, TF &qFrontier)
 template<class TG, class TF>
 bool LRAstar::evaluatePath(std::vector<Vertex> path, TG &qUpdate, TG &qRewire, TF &qExtend, TF &qFrontier)
 {
- /* assert(path.size() != 1);
+  assert(path.size() != 1);
 
-  // Increase beta to alpha if goal is on current path
+  // Increase greediness to lookahead if goal is on current path
   int greediness;
   if(path[0] == mGoalVertex)
     greediness = mLookahead;
@@ -769,14 +769,14 @@ bool LRAstar::evaluatePath(std::vector<Vertex> path, TG &qUpdate, TG &qRewire, T
     // Determine the edge length
     Edge uv;
     bool edgeExists;
-    boost::tie(uv, edgeExists) = edge(u, v, g);
+    boost::tie(uv, edgeExists) = edge(u, v, graph);
     assert(edgeExists);
-    double edgeLength = g[uv].length;
+    double edgeLength = graph[uv].length;
 
     // Actual Collision Check
     if (!evaluateEdge(uv))
     {
-      std::vector<Vertex>& children = g[u].node.children();
+      std::vector<Vertex>& children = graph[u].children;
       std::size_t indx;
       for(indx = 0; indx != children.size(); ++indx)
       {
@@ -796,7 +796,7 @@ bool LRAstar::evaluatePath(std::vector<Vertex> path, TG &qUpdate, TG &qRewire, T
 
     else
     {
-      if(g[v].node.budget() == mLookahead)
+      if (graph[v].budgetToExtend == mLookahead)
       {
         auto iterQ = qFrontier.find(v);
         if(iterQ != qFrontier.end())
@@ -804,14 +804,14 @@ bool LRAstar::evaluatePath(std::vector<Vertex> path, TG &qUpdate, TG &qRewire, T
         isLeaf = true;
       }
 
-      g[v].node.updateBudget(0);
-      g[v].node.updateLazyCost(0);
-      g[v].node.updateCost(g[u].node.cost() + edgeLength);
+      graph[v].budgetToExtend = 0;
+      graph[v].lazyCostToCome = 0;
+      graph[v].costToCome = graph[u].costToCome + edgeLength;
 
       assert(qFrontier.find(v) == qFrontier.end());
       assert(qExtend.find(v) == qExtend.end());
 
-      if(isLeaf)
+      if (isLeaf)
       {
         assert(qExtend.find(u) == qExtend.end());
         assert(qFrontier.find(u) == qFrontier.end());
@@ -824,7 +824,7 @@ bool LRAstar::evaluatePath(std::vector<Vertex> path, TG &qUpdate, TG &qRewire, T
       if(v == mGoalVertex)
         return true;
     }
-  }*/
+  }
   return false;
 }
 
