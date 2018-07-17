@@ -90,6 +90,16 @@ public:
 
   ///////////////////////////////////////////////////////////////////
 
+  enum CollisionStatus
+  {
+    BLOCKED,
+    FREE
+  };
+
+  ///////////////////////////////////////////////////////////////////
+
+  ///////////////////////////////////////////////////////////////////
+
   // Properties associated with each roadmap vertex.
   struct VProp
   {
@@ -101,6 +111,9 @@ public:
 
     /// Estimate Cost-to-Come
     double lazyCostToCome;
+
+    /// Heuristic value
+    double heuristic;
 
     /// Budget
     double budgetToExtend;
@@ -117,6 +130,9 @@ public:
     /// Visited TODO(avk): Needed?
     bool visited;
 
+    /// Collision status
+    CollisionStatus status;
+
   }; // struct VProp
 
   // Properties associated with each roadmap edge.
@@ -130,6 +146,9 @@ public:
 
     /// States embedded in an edge
     std::vector<utils::StateWrapperPtr> edgeStates;
+
+    /// Collision status
+    CollisionStatus status;
 
   }; // struct EProp
 
@@ -227,12 +246,6 @@ public:
   /// Number of edges rewired thus far.
   std::size_t getNumEdgeRewires() const;
 
-  /// Total time spent searching for paths.
-  double getSearchTime() const;
-
-  /// Total time spent doing collision checks.
-  double getCollisionCheckTime() const;
-
   ///////////////////////////////////////////////////////////////////
 
   ///////////////////////////////////////////////////////////////////
@@ -286,12 +299,6 @@ private:
 
   /// Number of edges rewired.
   std::size_t mNumEdgeRewires{0u};
-
-  /// Time spent in search.
-  double mSearchTime{0.0};
-
-  /// Time spent on collision checking.
-  double mCollisionCheckTime{0.0};
 
   /// Cost of optimal path.
   double mBestPathCost{std::numeric_limits<double>::infinity()};
