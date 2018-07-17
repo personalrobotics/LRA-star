@@ -478,32 +478,31 @@ void LRAstar::extendLazyBand(TF &qExtend, TF &qFrontier)
 template<class TG, class TF>
 void LRAstar::updateLazyBand(TG &qUpdate, TF &qExtend, TF &qFrontier)
 {
- /* while(!qUpdate.empty())
+  while(!qUpdate.empty())
   {
     Vertex u = *qUpdate.begin();
     qUpdate.erase(qUpdate.begin());
 
-    assert(g[u].node.budget() < mLookahead);
+    assert(graph[u].budgetToExtend < mLookahead);
     bool isLeaf;
 
-    std::vector<Vertex>& children = g[u].node.children();
+    std::vector<Vertex>& children = graph[u].children;
 
     for(auto iterV = children.begin(); iterV != children.end(); ++iterV)
     {
       Vertex v = *iterV;
-      Node nv = g[v].node;
       isLeaf = false;
 
-      if(nv.budget() != 0)
+      if(graph[v].budgetToExtend != 0)
       {
         Edge uv;
         bool edgeExists;
-        boost::tie(uv, edgeExists) = edge(u, v, g);
+        boost::tie(uv, edgeExists) = edge(u, v, graph);
         assert(edgeExists);
-        double edgeLength = g[uv].length;
+        double edgeLength = graph[uv].length;
 
         // Remove vertex from qFrontier
-        if(nv.budget() == mLookahead)
+        if(graph[v].budgetToExtend == mLookahead)
         {
           auto iterQ = qFrontier.find(v);
           if(iterQ != qFrontier.end())
@@ -519,10 +518,9 @@ void LRAstar::updateLazyBand(TG &qUpdate, TF &qExtend, TF &qFrontier)
           isLeaf = true;
         }
 
-        nv.updateCost(g[u].node.cost());
-        nv.updateLazyCost(g[u].node.lazyCost() + edgeLength);
-        nv.updateBudget(g[u].node.budget() + 1);
-        g[v].node = nv;
+        graph[v].costToCome = graph[u].costToCome;
+        graph[v].lazyCostToCome = graph[u].lazyCostToCome + edgeLength;
+        graph[v].budgetToExtend = graph[u].budgetToExtend + 1;
 
         if(isLeaf || v == mGoalVertex)
         {
@@ -531,12 +529,12 @@ void LRAstar::updateLazyBand(TG &qUpdate, TF &qExtend, TF &qFrontier)
           assert(qExtend.find(v) == qExtend.end());
           qExtend.emplace(v);
         }
-        assert(g[v].node.budget() < mLookahead);
+        assert(graph[v].budgetToExtend < mLookahead);
 
         qUpdate.emplace(v);
       }
     }
-  }*/
+  }
 }
 
 // ===========================================================================================
