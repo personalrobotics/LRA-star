@@ -322,7 +322,7 @@ ompl::base::PlannerStatus LRAstar::solve(const ompl::base::PlannerTerminationCon
 template<class TF>
 void LRAstar::extendLazyBand(TF &qExtend, TF &qFrontier)
 {
-/*  while(!qExtend.empty())
+  while(!qExtend.empty())
   {
     // Obtain the Top Key in qFrontier for Lazy Extension
     double cReference;
@@ -340,10 +340,10 @@ void LRAstar::extendLazyBand(TF &qExtend, TF &qFrontier)
       break;
 
     qExtend.erase(qExtend.begin());
-    assert(g[u].node.budget() < mLookahead);
-    assert(g[u].visited);
+    assert(graph[u].budgetToExtend < mLookahead);
+    assert(graph[u].visited);
 
-    if(g[u].status == CollisionStatus::BLOCKED)
+    if(graph[u].status == CollisionStatus::BLOCKED)
       continue;
 
     if(u == mGoalVertex)
@@ -352,30 +352,29 @@ void LRAstar::extendLazyBand(TF &qExtend, TF &qFrontier)
     else
     {
       NeighborIter ni, ni_end;
-      for (boost::tie(ni, ni_end) = adjacent_vertices(u, g); ni != ni_end; ++ni)
+      for (boost::tie(ni, ni_end) = adjacent_vertices(u, graph); ni != ni_end; ++ni)
       {
         Vertex v = *ni;
 
-        if(g[v].status == CollisionStatus::BLOCKED)
+        if(graph[v].status == CollisionStatus::BLOCKED)
           continue;
 
         // Enforce prevention of loops
-        if(v == g[u].node.parent())
+        if(v == graph[u].parent)
             continue;
 
         // Determine the edge length
         Edge uv;
         bool edgeExists;
-        boost::tie(uv, edgeExists) = edge(u, v, g);
+        boost::tie(uv, edgeExists) = edge(u, v, graph);
         assert(edgeExists);
-        double edgeLength = g[uv].length;
+        double edgeLength = graph[uv].length;
 
-        if(g[uv].status == CollisionStatus::FREE)
+        if(graph[uv].status == CollisionStatus::FREE)
         {
-          Node nv = {v, u, {}, g[u].node.cost(), g[u].node.lazyCost() + edgeLength, g[u].node.budget() + 1, heuristicFunction(v)};
-          if(g[v].visited == false)
+          if(graph[v].visited == false)
           {
-            g[v].visited = true;
+            graph[v].visited = true;
             assert(qExtend.find(v) == qExtend.end());
             assert(qFrontier.find(v) == qFrontier.end());
           }
@@ -383,7 +382,7 @@ void LRAstar::extendLazyBand(TF &qExtend, TF &qFrontier)
           {
             double estimateOld = estimateCostToCome(v);
             double estimateNew = estimateCostToCome(u) + edgeLength;
-            Vertex previousParent = g[v].node.parent();
+            Vertex previousParent = graph[v].parent;
 
             if(estimateOld < estimateNew)
               continue;
@@ -398,14 +397,14 @@ void LRAstar::extendLazyBand(TF &qExtend, TF &qFrontier)
             // else, update the old parent and the subsequent subtree
 
             // Remove vertex from its current siblings
-            std::vector<Vertex>& children = g[previousParent].node.children();
+            std::vector<Vertex>& children = graph[previousParent].children;
             std::size_t indx;
             for(indx = 0; indx != children.size(); ++indx)
             {
               if(children[indx] == v)
                 break;
             }
-            assert(indx != children.size()); //child has been found
+            assert(indx != children.size()); // child has been found
 
             // Remove child
             if (indx != children.size()-1)
@@ -428,12 +427,12 @@ void LRAstar::extendLazyBand(TF &qExtend, TF &qFrontier)
             while(!subtree.empty())
             {
               auto iterT = subtree.rbegin();
-              std::vector<Vertex>& children = g[*iterT].node.children();
+              std::vector<Vertex>& children = graph[*iterT].children;
               subtree.pop_back();
 
               for(auto iterV = children.begin(); iterV != children.end(); ++iterV)
               {
-                g[*iterV].visited = false;
+                graph[*iterV].visited = false;
                 subtree.emplace_back(*iterV);
 
                 auto iterQ = qFrontier.find(*iterV);
@@ -449,14 +448,18 @@ void LRAstar::extendLazyBand(TF &qExtend, TF &qFrontier)
           }
 
           // Update Vertex Node
-          g[v].node = nv;
+          graph[v].parent = u;
+          graph[v].costToCome = graph[u].costToCome;
+          graph[v].lazyCostToCome = graph[u].lazyCostToCome + edgeLength;
+          graph[v].budgetToExtend = graph[u].budgetToExtend + 1;
+          graph[v].heuristic = heuristicFunction(v);
 
           // Add it to its new siblings
-          std::vector<Vertex>& children = g[u].node.children();
+          std::vector<Vertex>& children = graph[u].children;
           children.emplace_back(v);
 
           // Add it to appropriate queue
-          double budget = g[v].node.budget();
+          double budget = graph[v].budgetToExtend;
           if (budget == mLookahead)
           {
             assert(qFrontier.find(v) == qFrontier.end());
@@ -470,7 +473,7 @@ void LRAstar::extendLazyBand(TF &qExtend, TF &qFrontier)
         }
       }
     }
-  }*/
+  }
 }
 
 // ===========================================================================================
