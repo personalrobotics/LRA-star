@@ -1,4 +1,4 @@
-#include "utils/BisectPerm.hpp"
+#include "LRAstar/utils/BisectPerm.hpp"
 
 namespace LRAstar {
 namespace utils {

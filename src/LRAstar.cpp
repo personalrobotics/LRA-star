@@ -1,46 +1,11 @@
-/*********************************************************************
-* Software License Agreement (BSD License)
-*
-*  Copyright (c) 2014, University of Washington
-*  All rights reserved.
-*
-*  Redistribution and use in source and binary forms, with or without
-*  modification, are permitted provided that the following conditions
-*  are met:
-*
-*   * Redistributions of source code must retain the above copyright
-*     notice, this list of conditions and the following disclaimer.
-*   * Redistributions in binary form must reproduce the above
-*     copyright notice, this list of conditions and the following
-*     disclaimer in the documentation and/or other materials provided
-*     with the distribution.
-*   * Neither the name of the University of Washington nor the names of its
-*     contributors may be used to endorse or promote products derived
-*     from this software without specific prior written permission.
-*
-*  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-*  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-*  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
-*  FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
-*  COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
-*  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
-*  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-*  LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-*  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
-*  LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
-*  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-*  POSSIBILITY OF SUCH DAMAGE.
-*********************************************************************/
-
 /* Authors: Aditya Vamsikrishna Mandalika */
 
-#include "LRAstar.hpp"
+#include "LRAstar/LRAstar.hpp"
 
 #include <algorithm>        // std::reverse
 #include <cmath>            // pow, sqrt
 #include <set>              // std::set
-#include <assert.h>         // Debug
-#include <chrono>           // record time
+#include <assert.h>         // debug
 
 namespace LRAstar
 {
@@ -110,7 +75,6 @@ void LRAstar::setup()
     graph[*vi].costToCome = std::numeric_limits<double>::infinity();
     graph[*vi].lazyCostToCome = std::numeric_limits<double>::infinity();
     graph[*vi].heuristic = std::numeric_limits<double>::infinity();
-    graph[*vi].inLazyBand = false;
     graph[*vi].visited = false;
     graph[*vi].status = CollisionStatus::FREE;
   }
@@ -138,7 +102,6 @@ void LRAstar::clear()
     graph[*vi].lazyCostToCome = std::numeric_limits<double>::infinity();
     graph[*vi].heuristic = std::numeric_limits<double>::infinity();
     graph[*vi].budgetToExtend = 0;
-    graph[*vi].inLazyBand = false;
     graph[*vi].visited = false;
     graph[*vi].status = CollisionStatus::FREE;
   }
@@ -192,7 +155,6 @@ void LRAstar::setProblemDefinition(const ompl::base::ProblemDefinitionPtr &pdef)
   graph[mGoalVertex].lazyCostToCome = 0;
   graph[mGoalVertex].heuristic = heuristicFunction(mStartVertex);
   graph[mStartVertex].parent = -1;
-  graph[mStartVertex].inLazyBand = false;
   graph[mStartVertex].visited = false;
   graph[mStartVertex].status = CollisionStatus::FREE;
 
@@ -201,7 +163,6 @@ void LRAstar::setProblemDefinition(const ompl::base::ProblemDefinitionPtr &pdef)
   graph[mGoalVertex].costToCome = std::numeric_limits<double>::infinity();
   graph[mGoalVertex].lazyCostToCome = std::numeric_limits<double>::infinity();
   graph[mGoalVertex].heuristic = 0;
-  graph[mGoalVertex].inLazyBand = false;
   graph[mGoalVertex].visited = false;
   graph[mGoalVertex].status = CollisionStatus::FREE;
 

@@ -22,7 +22,7 @@
 #include <ompl/geometric/PathGeometric.h>
 
 // Custom header files
-#include "LRAstar.hpp"
+#include "LRAstar/LRAstar.hpp"
 
 namespace po = boost::program_options;
 

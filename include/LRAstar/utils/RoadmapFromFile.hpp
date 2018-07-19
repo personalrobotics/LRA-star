@@ -1,7 +1,7 @@
 // TODO(avk): Docstrings missing!
 
-#ifndef UTIL_ROADMAPFROMFILE_HPP_
-#define UTIL_ROADMAPFROMFILE_HPP_
+#ifndef LRASTAR_UTILS_ROADMAPFROMFILE_HPP_
+#define LRASTAR_UTILS_ROADMAPFROMFILE_HPP_
 
 #include <iostream>
 #include <string>
@@ -170,4 +170,4 @@ class RoadmapFromFile
 } // namespace utils
 } // namespace LRAstar
 
-#endif // UTIL_ROADMAPFROMFILE_HPP_
+#endif // LRASTAR_UTILS_ROADMAPFROMFILE_HPP_

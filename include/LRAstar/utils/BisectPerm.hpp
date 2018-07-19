@@ -1,5 +1,5 @@
-#ifndef UTIL_BISECTPERM_HPP_
-#define UTIL_BISECTPERM_HPP_
+#ifndef LRASTAR_UTILS_BISECTPERM_HPP_
+#define LRASTAR_UTILS_BISECTPERM_HPP_
 
 #include <vector>
 #include <map>
@@ -32,4 +32,4 @@ private:
 } // namespace utils
 } // namespace LRAstar
 
-#endif // UTIL_BISECTPERM_HPP_
+#endif // LRASTAR_UTILS_BISECTPERM_HPP_

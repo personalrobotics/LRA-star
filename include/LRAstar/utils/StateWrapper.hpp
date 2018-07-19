@@ -1,5 +1,5 @@
-#ifndef STATE_WRAPPER_HPP_
-#define STATE_WRAPPER_HPP_
+#ifndef LRASTAR_UTILS_STATE_WRAPPER_HPP_
+#define LRASTAR_UTILS_STATE_WRAPPER_HPP_
 
 #include <ompl/base/StateSpace.h>
 
@@ -38,4 +38,4 @@ typedef boost::shared_ptr<StateWrapper> StateWrapperPtr;
 } // namespace utils
 } // namespace LRAstar
 
-#endif // STATE_WRAPPER_H_
+#endif // LRASTAR_UTILS_STATE_WRAPPER_HPP_
