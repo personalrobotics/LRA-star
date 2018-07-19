@@ -7,7 +7,6 @@
     <maintainer email="adityavk@uw.edu"></maintainer>
     <license>BSD</license>
     <buildtool_depend>catkin</buildtool_depend>
-    <buildtool_depend>clang-format-3.8</buildtool_depend>
     <depend>ompl</depend>
     <depend>boost</depend>
 </package>
