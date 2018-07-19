@@ -1,14 +1,11 @@
+/* Authors: Aditya Vamsikrishna Mandalika */
+
+#include "LRAstar/LRAstar.hpp"
+
 #include <algorithm>        // std::reverse
 #include <cmath>            // pow, sqrt
-#include <iostream>         // std::cerr
-#include <queue>            // std::priority_queue
 #include <set>              // std::set
-#include <unordered_set>    // std::unordered_set
-#include <fstream>          // Write to file
-#include <assert.h>         // Debug
-#include <chrono>           // record rewireTime 
-
-#include "LRAstar.hpp"
+#include <assert.h>         // debug
 
 namespace LRAstar
 {
@@ -20,254 +17,273 @@ LRAstar::LRAstar(const ompl::base::SpaceInformationPtr &si)
   , mLookahead(1.0)
   , mGreediness(1.0)
   , mConnectionRadius(1.0)
-  , mBestPathCost(std::numeric_limits<double>::infinity())
   , mCheckRadius(0.4*mSpace->getLongestValidSegmentLength())
-  , mNumEdgeEvals(0u)
-  , mNumEdgeRewires(0u)
-  , mSearchTime(0.0)
-  , mCollCheckTime(0.0)
 {
-  Planner::declareParam<double>("lookahead", this, &LRAstar::setLookahead, &LRAstar::getLookahead);
-  Planner::declareParam<double>("greediness", this, &LRAstar::setGreediness, &LRAstar::getGreediness);
-  Planner::declareParam<std::string>("roadmap_filename", this, &LRAstar::setRoadmapFileName, &LRAstar::getRoadmapFileName);
+  // Register my setting callbacks.
+  Planner::declareParam<double>("lookahead", this, &LRAstar::setLookahead, &LRAstar::getLookahead, "1.0:1.0:Infinity");
+  Planner::declareParam<double>("greediness", this, &LRAstar::setGreediness, &LRAstar::getGreediness, "1.0:1.0:Lookahead");
+  Planner::declareParam<std::string>("roadmapFilename", this, &LRAstar::setRoadmapFileName, &LRAstar::getRoadmapFileName);
 }
 
 LRAstar::LRAstar(const ompl::base::SpaceInformationPtr &si,
-  const std::string& _roadmapFileName,
-  double _lookahead,
-  double _greediness)
+  const std::string& roadmapFileName,
+  double lookahead,
+  double greediness)
   : ompl::base::Planner(si, "LRAstar")
   , mSpace(si->getStateSpace())
-  , mRoadmapFileName(_roadmapFileName)
-  , mLookahead(_lookahead)
-  , mGreediness(_greediness)
+  , mRoadmapFileName(roadmapFileName)
+  , mLookahead(lookahead)
+  , mGreediness(greediness)
   , mConnectionRadius(0.4*mSpace->getLongestValidSegmentLength())
-  , mBestPathCost(std::numeric_limits<double>::infinity())
   , mCheckRadius(0.5*mSpace->getLongestValidSegmentLength())
-  , mNumEdgeEvals(0u)
-  , mNumEdgeRewires(0u)
-  , mSearchTime(0.0)
-  , mCollCheckTime(0.0)
 {
+  if (mRoadmapFileName == "")
+    throw std::invalid_argument("Provide a non-empty path to roadmap.");
+
+  if (mLookahead < 1.0)
+    throw std::invalid_argument("Lookahead should be greater than or equal to 1.");
+
+  if (mGreediness > mLookahead)
+    throw std::invalid_argument("Greediness is bounded above by lookahead.");
 }
 
 LRAstar::~LRAstar()
 {
+  // Do nothing.
 }
 
-// //////////////////////////////////////////////////////////////////////
-// Setters
-void LRAstar::setLookahead(double _lookahead)
+// ===========================================================================================
+void LRAstar::setup()
 {
-  OMPL_INFORM("Lookahead Set: %d", _lookahead);
-  mLookahead = _lookahead;
-}
+  // Check if already setup.
+  if (static_cast<bool>(ompl::base::Planner::setup_))
+    return;
 
-void LRAstar::setGreediness(double _greediness)
-{
-  OMPL_INFORM("Greediness Set: %d", _greediness);
-  mGreediness = _greediness;
-}
+  ompl::base::Planner::setup();
 
-void LRAstar::setRoadmapFileName(const std::string& _roadmapFileName)
-{
-  mRoadmapFileName = _roadmapFileName;
-}
+  roadmapPtr = boost::shared_ptr<utils::RoadmapFromFile<Graph, VPStateMap, utils::StateWrapper, EPLengthMap>>
+                (new utils::RoadmapFromFile<Graph, VPStateMap, utils::StateWrapper, EPLengthMap>
+                (mSpace, mRoadmapFileName));
 
-void LRAstar::setConnectionRadius(double _connectionRadius)
-{
-  OMPL_INFORM("Connection Radius Set: %d", _connectionRadius);
-  mConnectionRadius = _connectionRadius;
-}
+  roadmapPtr->generate(graph, get(&VProp::state, graph),
+                          get(&EProp::length, graph));
 
-// Getters
-double LRAstar::getLookahead() const
-{
-  return mLookahead;
-}
-
-double LRAstar::getGreediness() const
-{
-  return mGreediness;
-}
-
-double LRAstar::getConnectionRadius() const
-{
-  return mConnectionRadius;
-}
-
-LRAstar::Vertex LRAstar::getStartVertex() const
-{
-  return mStartVertex;
-}
-
-LRAstar::Vertex LRAstar::getGoalVertex() const
-{
-  return mGoalVertex;
-}
-
-double LRAstar::getBestPathCost() const
-{
-  return mBestPathCost;
-}
-
-std::string LRAstar::getRoadmapFileName() const
-{
-  return mRoadmapFileName;
-}
-
-
-//////////////////////////////////////////////////////////////////////
-// Public Helper Methods
-
-ompl::base::PathPtr LRAstar::constructSolution(const Vertex &start, const Vertex &goal)
-{
-  std::set<Vertex> seen;
-
-  ompl::geometric::PathGeometric *path = new ompl::geometric::PathGeometric(si_);
-  Vertex v = goal;
-  while (v != start)
-  {      
-    if (seen.find(v) != seen.end())
-    {
-      OMPL_ERROR("infinite loop");
-      break;
-    }
-
-    seen.insert(v);
-    path->append(g[v].v_state->state);
-    v = g[v].node.parent();
-  }
-
-  if (v == start)
+  // Set default vertex values.
+  VertexIter vi, vi_end;
+  for (boost::tie(vi, vi_end) = vertices(graph); vi != vi_end; ++vi)
   {
-    path->append(g[start].v_state->state);
+    graph[*vi].costToCome = std::numeric_limits<double>::infinity();
+    graph[*vi].lazyCostToCome = std::numeric_limits<double>::infinity();
+    graph[*vi].heuristic = std::numeric_limits<double>::infinity();
+    graph[*vi].visited = false;
+    graph[*vi].status = CollisionStatus::FREE;
   }
-  path->reverse();
-  return ompl::base::PathPtr(path);
+
+  // Set default edge values.
+  EdgeIter ei, ei_end;
+  for (boost::tie(ei, ei_end) = edges(graph); ei != ei_end; ++ei)
+  {
+    graph[*ei].isEvaluated = false;
+    graph[*ei].status = CollisionStatus::FREE;
+    initializeEdgePoints(*ei);
+  }
+
+  mBestPathCost = std::numeric_limits<double>::infinity();
 }
 
-void LRAstar::initializeEdgePoints(const Edge& e)
+// ===========================================================================================
+void LRAstar::clear()
 {
-  auto startState = g[source(e,g)].v_state->state;
-  auto endState = g[target(e,g)].v_state->state;
-
-  unsigned int nStates = static_cast<unsigned int>(std::floor(g[e].length / (2.0*mCheckRadius)));
-  
-  // Just start and goal
-  if(nStates < 2u) 
+  // Set default vertex values.
+  VertexIter vi, vi_end;
+  for (boost::tie(vi, vi_end) = vertices(graph); vi != vi_end; ++vi)
   {
-    nStates = 2u;
+    graph[*vi].costToCome = std::numeric_limits<double>::infinity();
+    graph[*vi].lazyCostToCome = std::numeric_limits<double>::infinity();
+    graph[*vi].heuristic = std::numeric_limits<double>::infinity();
+    graph[*vi].budgetToExtend = 0;
+    graph[*vi].visited = false;
+    graph[*vi].status = CollisionStatus::FREE;
   }
 
-  g[e].edgeStates.resize(nStates);
-
-  for(unsigned int i = 0; i < nStates; i++)
+  // Set default edge values.
+  EdgeIter ei, ei_end;
+  for (boost::tie(ei, ei_end) = edges(graph); ei != ei_end; ++ei)
   {
-    g[e].edgeStates[i].reset(new StateWrapper(mSpace));
+    graph[*ei].isEvaluated = false;
+    graph[*ei].status = CollisionStatus::FREE;
+    initializeEdgePoints(*ei);
   }
 
-  const std::vector< std::pair<int,int> > & order = mBisectPermObj.get(nStates);
+  // Internal evaluation variables.
+  mBestPathCost = std::numeric_limits<double>::infinity();
+  mNumEdgeEvals = 0;
+  mNumEdgeRewires = 0;
 
-  for(unsigned int i = 0; i < nStates; i++)
-  {
-    mSpace->interpolate(startState, endState,
-      1.0*(1+order[i].first)/(nStates+1), g[e].edgeStates[i]->state);
-  }
+  // Helper containers.
+  mSetRewire.clear();
 }
 
-bool LRAstar::evaluateEdge(const LRAstar::Edge& e)
+// ===========================================================================================
+void LRAstar::setProblemDefinition(const ompl::base::ProblemDefinitionPtr &pdef)
 {
-  // March along edge states with highest resolution
-  mNumEdgeEvals++;
+  // Make sure we setup the planner first.
+  if (!static_cast<bool>(ompl::base::Planner::setup_))
+  {
+    setup();
+  }
+
+  ompl::base::Planner::setProblemDefinition(pdef);
+
+  utils::StateWrapperPtr startState(new utils::StateWrapper(mSpace));
+  mSpace->copyState(startState->state, pdef_->getStartState(0));
+
+  utils::StateWrapperPtr goalState(new utils::StateWrapper(mSpace));
+  mSpace->copyState(goalState->state, pdef_->getGoal()->as<ompl::base::GoalState>()->getState());
 
   auto validityChecker = si_->getStateValidityChecker();
-  
-  Vertex startVertex = source(e,g);
-  Vertex endVertex   = target(e,g);
-  auto startState = g[startVertex].v_state->state;
-  auto endState = g[endVertex].v_state->state;
 
-  auto nStates = g[e].edgeStates.size();
+  if(!validityChecker->isValid(startState->state))
+    throw ompl::Exception("Start configuration is in collision!");
+  if(!validityChecker->isValid(goalState->state))
+    throw ompl::Exception("Goal configuration is in collision!");
 
-  bool checkResult;
-  std::chrono::time_point<std::chrono::system_clock> startEvaluationTime{std::chrono::system_clock::now()};
-  
-  // Evaluate Start and End States [we only assume states in self-collision are pruned out]
-  checkResult = validityChecker->isValid(startState);
-  if(!checkResult)
-  {
-    g[startVertex].vertexStatus = CollisionStatus::BLOCKED;
-    return checkResult;
-  }
-  checkResult = validityChecker->isValid(endState);
-  if(!checkResult)
-  {
-    g[endVertex].vertexStatus = CollisionStatus::BLOCKED;
-    return checkResult;
-  }
+  // Add start and goal vertices to the graph
+  mStartVertex = boost::add_vertex(graph);
+  graph[mStartVertex].state = startState;
+  graph[mGoalVertex].costToCome = 0;
+  graph[mGoalVertex].lazyCostToCome = 0;
+  graph[mGoalVertex].heuristic = heuristicFunction(mStartVertex);
+  graph[mStartVertex].parent = -1;
+  graph[mStartVertex].visited = false;
+  graph[mStartVertex].status = CollisionStatus::FREE;
 
-  // Evaluate the States in between
-  for(unsigned int i = 1; i < nStates-1; i++)
+  mGoalVertex = boost::add_vertex(graph);
+  graph[mGoalVertex].state = goalState;
+  graph[mGoalVertex].costToCome = std::numeric_limits<double>::infinity();
+  graph[mGoalVertex].lazyCostToCome = std::numeric_limits<double>::infinity();
+  graph[mGoalVertex].heuristic = 0;
+  graph[mGoalVertex].visited = false;
+  graph[mGoalVertex].status = CollisionStatus::FREE;
+
+  VertexIter vi, vi_end;
+  for (boost::tie(vi, vi_end) = vertices(graph); vi != vi_end; ++vi)
   {
-    checkResult = validityChecker->isValid(g[e].edgeStates[i]->state);
-    if(!checkResult)
+    double startDist = mSpace->distance(graph[*vi].state->state, startState->state);
+    double goalDist  = mSpace->distance(graph[*vi].state->state, goalState->state);
+
+    if (startDist < mConnectionRadius)
     {
-      g[e].edgeStatus = CollisionStatus::BLOCKED;
-      g[e].length = std::numeric_limits<double>::max();
-      break;
+      if(mStartVertex == *vi)
+        continue;
+      std::pair<LRAstar::Edge,bool> newEdge = boost::add_edge(mStartVertex, *vi, graph);
+      graph[newEdge.first].length = startDist;
+      graph[newEdge.first].isEvaluated = false;
+      graph[newEdge.first].status = CollisionStatus::FREE;
+      initializeEdgePoints(newEdge.first);
+    }
+
+    if (goalDist < mConnectionRadius)
+    {
+      if(mGoalVertex == *vi)
+        continue;
+      std::pair<LRAstar::Edge,bool> newEdge = boost::add_edge(mGoalVertex, *vi, graph);
+      graph[newEdge.first].length = goalDist;
+      graph[newEdge.first].isEvaluated = false;
+      graph[newEdge.first].status = CollisionStatus::FREE;
+      initializeEdgePoints(newEdge.first);
     }
   }
-  
-  std::chrono::time_point<std::chrono::system_clock> endEvaluationTime{std::chrono::system_clock::now()};
-  std::chrono::duration<double> elapsedSeconds{endEvaluationTime-startEvaluationTime};
-  mCollCheckTime += elapsedSeconds.count();
-
-  return checkResult;
 }
 
-//////////////////////////////////////////////////////////////////////
-// Private Helper Methods
-
-/// Supplementary Functions
-using Vertex = LRAstar::Vertex;
-std::vector<Vertex> LRAstar::pathToBorder(Vertex v)
+// ===========================================================================================
+ompl::base::PlannerStatus LRAstar::solve(const ompl::base::PlannerTerminationCondition & ptc)
 {
-  std::vector<Vertex> path;
-  path.emplace_back(v);
-  double currentBudget = g[v].node.budget();
-
-  while(currentBudget > 0)
+  // Priority Function: g-value
+  auto cmpGValue = [&](const Vertex& left, const Vertex& right)
   {
-    v = g[v].node.parent();
-    assert(g[v].node.budget() == currentBudget - 1);
-    path.emplace_back(v);
-    currentBudget = g[v].node.budget();
+    double estimateLeft = estimateCostToCome(left);
+    double estimateRight = estimateCostToCome(right);
 
-    assert(g[v].visited);
-    assert(g[v].node.parent() != v);
-    assert(g[v].node.budget() <= mLookahead);
+    if (estimateRight - estimateLeft > 0)
+      return true;
+    if (estimateLeft - estimateRight > 0)
+      return false;
+    if (left < right)
+      return true;
+    else
+      return false;
+  };
+
+  // Priority Function: f-value
+  auto cmpFValue = [&](const Vertex& left, const Vertex& right)
+  {
+    double estimateLeft = estimateTotalCost(left);
+    double estimateRight = estimateTotalCost(right);
+
+    if (estimateRight - estimateLeft > 0)
+      return true;
+    if (estimateLeft - estimateRight > 0)
+      return false;
+    if (left < right)
+      return true;
+    else
+      return false;
+  };
+
+  std::set<Vertex, decltype(cmpGValue)> qUpdate(cmpGValue);
+  std::set<Vertex, decltype(cmpGValue)> qRewire(cmpGValue);
+  std::set<Vertex, decltype(cmpFValue)> qExtend(cmpFValue);
+  std::set<Vertex, decltype(cmpFValue)> qFrontier(cmpFValue);
+
+  bool solutionFound = false;
+
+  graph[mStartVertex].visited = true;
+  qExtend.insert(mStartVertex);
+
+  extendLazyBand(qExtend, qFrontier);
+
+  std::vector<Vertex> path;
+  while((!qFrontier.empty() && !solutionFound) || !qExtend.empty())
+  {
+    Vertex vTop = *qFrontier.begin();
+    qFrontier.erase(qFrontier.begin());
+    assert(graph[vTop].budgetToExtend == mLookahead || vTop == mGoalVertex);
+
+    path = pathToBorder(vTop);
+    bool goalFound = evaluatePath(path, qUpdate, qRewire, qExtend, qFrontier);
+
+    if(goalFound)
+    {
+        OMPL_INFORM("Solution Found!");
+        solutionFound = true;
+        break;
+    }
+    updateLazyBand(qUpdate, qExtend, qFrontier);
+    rewireLazyBand(qRewire, qExtend, qFrontier);
+    extendLazyBand(qExtend, qFrontier);
   }
-  return path;
+
+  if(solutionFound)
+  {
+    mBestPathCost = estimateCostToCome(mGoalVertex);
+    pdef_->addSolutionPath(constructSolution(mStartVertex, mGoalVertex));
+
+    OMPL_INFORM("Number of Edges Rewired:     %d", mNumEdgeRewires);
+    OMPL_INFORM("Number of Edges Evaluated:   %d", mNumEdgeEvals);
+    OMPL_INFORM("Cost of goal:                %f", mBestPathCost);
+
+    return ompl::base::PlannerStatus::EXACT_SOLUTION;
+  }
+
+  else
+  {
+    OMPL_INFORM("Solution NOT Found");
+  }
 }
 
-double LRAstar::estimateCostToCome(Vertex v)
-{
-  return g[v].node.cost() + g[v].node.lazyCost();
-}
-
-double LRAstar::heuristicFunction(Vertex v)
-{
-  return mSpace->distance(g[v].v_state->state, g[mGoalVertex].v_state->state);
-}
-
-double LRAstar::estimateTotalCost(Vertex v)
-{
-  return estimateCostToCome(v) + heuristicFunction(v);
-}
-
-
-/// Main Functions
+// ===========================================================================================
+//Extend
 template<class TF>
 void LRAstar::extendLazyBand(TF &qExtend, TF &qFrontier)
 {
@@ -289,10 +305,10 @@ void LRAstar::extendLazyBand(TF &qExtend, TF &qFrontier)
       break;
 
     qExtend.erase(qExtend.begin());
-    assert(g[u].node.budget() < mLookahead); 
-    assert(g[u].visited);
+    assert(graph[u].budgetToExtend < mLookahead);
+    assert(graph[u].visited);
 
-    if(g[u].vertexStatus == CollisionStatus::BLOCKED)
+    if(graph[u].status == CollisionStatus::BLOCKED)
       continue;
 
     if(u == mGoalVertex)
@@ -301,30 +317,29 @@ void LRAstar::extendLazyBand(TF &qExtend, TF &qFrontier)
     else
     {
       NeighborIter ni, ni_end;
-      for (boost::tie(ni, ni_end) = adjacent_vertices(u, g); ni != ni_end; ++ni)
+      for (boost::tie(ni, ni_end) = adjacent_vertices(u, graph); ni != ni_end; ++ni)
       {
         Vertex v = *ni;
 
-        if(g[v].vertexStatus == CollisionStatus::BLOCKED)
+        if(graph[v].status == CollisionStatus::BLOCKED)
           continue;
 
         // Enforce prevention of loops
-        if(v == g[u].node.parent())
+        if(v == graph[u].parent)
             continue;
 
         // Determine the edge length
         Edge uv;
         bool edgeExists;
-        boost::tie(uv, edgeExists) = edge(u, v, g);
+        boost::tie(uv, edgeExists) = edge(u, v, graph);
         assert(edgeExists);
-        double edgeLength = g[uv].length;
+        double edgeLength = graph[uv].length;
 
-        if(g[uv].edgeStatus == CollisionStatus::FREE)
+        if(graph[uv].status == CollisionStatus::FREE)
         {
-          Node nv = {v, u, {}, g[u].node.cost(), g[u].node.lazyCost() + edgeLength, g[u].node.budget() + 1, heuristicFunction(v)};
-          if(g[v].visited == false)
+          if(graph[v].visited == false)
           {
-            g[v].visited = true; 
+            graph[v].visited = true;
             assert(qExtend.find(v) == qExtend.end());
             assert(qFrontier.find(v) == qFrontier.end());
           }
@@ -332,7 +347,7 @@ void LRAstar::extendLazyBand(TF &qExtend, TF &qFrontier)
           {
             double estimateOld = estimateCostToCome(v);
             double estimateNew = estimateCostToCome(u) + edgeLength;
-            Vertex previousParent = g[v].node.parent();
+            Vertex previousParent = graph[v].parent;
 
             if(estimateOld < estimateNew)
               continue;
@@ -347,16 +362,16 @@ void LRAstar::extendLazyBand(TF &qExtend, TF &qFrontier)
             // else, update the old parent and the subsequent subtree
 
             // Remove vertex from its current siblings
-            std::vector<Vertex>& children = g[previousParent].node.children();
+            std::vector<Vertex>& children = graph[previousParent].children;
             std::size_t indx;
             for(indx = 0; indx != children.size(); ++indx)
             {
               if(children[indx] == v)
                 break;
             }
-            assert(indx != children.size()); //child has been found
+            assert(indx != children.size()); // child has been found
 
-            // Remove child 
+            // Remove child
             if (indx != children.size()-1)
               children[indx] = children.back();
             children.pop_back();
@@ -377,12 +392,12 @@ void LRAstar::extendLazyBand(TF &qExtend, TF &qFrontier)
             while(!subtree.empty())
             {
               auto iterT = subtree.rbegin();
-              std::vector<Vertex>& children = g[*iterT].node.children();    
+              std::vector<Vertex>& children = graph[*iterT].children;
               subtree.pop_back();
-              
+
               for(auto iterV = children.begin(); iterV != children.end(); ++iterV)
               {
-                g[*iterV].visited = false;
+                graph[*iterV].visited = false;
                 subtree.emplace_back(*iterV);
 
                 auto iterQ = qFrontier.find(*iterV);
@@ -398,14 +413,18 @@ void LRAstar::extendLazyBand(TF &qExtend, TF &qFrontier)
           }
 
           // Update Vertex Node
-          g[v].node = nv;
+          graph[v].parent = u;
+          graph[v].costToCome = graph[u].costToCome;
+          graph[v].lazyCostToCome = graph[u].lazyCostToCome + edgeLength;
+          graph[v].budgetToExtend = graph[u].budgetToExtend + 1;
+          graph[v].heuristic = heuristicFunction(v);
 
           // Add it to its new siblings
-          std::vector<Vertex>& children = g[u].node.children();
+          std::vector<Vertex>& children = graph[u].children;
           children.emplace_back(v);
 
           // Add it to appropriate queue
-          double budget = g[v].node.budget();
+          double budget = graph[v].budgetToExtend;
           if (budget == mLookahead)
           {
             assert(qFrontier.find(v) == qFrontier.end());
@@ -422,6 +441,8 @@ void LRAstar::extendLazyBand(TF &qExtend, TF &qFrontier)
   }
 }
 
+// ===========================================================================================
+// Update
 template<class TG, class TF>
 void LRAstar::updateLazyBand(TG &qUpdate, TF &qExtend, TF &qFrontier)
 {
@@ -430,27 +451,26 @@ void LRAstar::updateLazyBand(TG &qUpdate, TF &qExtend, TF &qFrontier)
     Vertex u = *qUpdate.begin();
     qUpdate.erase(qUpdate.begin());
 
-    assert(g[u].node.budget() < mLookahead);
+    assert(graph[u].budgetToExtend < mLookahead);
     bool isLeaf;
 
-    std::vector<Vertex>& children = g[u].node.children();
+    std::vector<Vertex>& children = graph[u].children;
 
     for(auto iterV = children.begin(); iterV != children.end(); ++iterV)
     {
       Vertex v = *iterV;
-      Node nv = g[v].node;
       isLeaf = false;
 
-      if(nv.budget() != 0)
+      if(graph[v].budgetToExtend != 0)
       {
         Edge uv;
         bool edgeExists;
-        boost::tie(uv, edgeExists) = edge(u, v, g);
+        boost::tie(uv, edgeExists) = edge(u, v, graph);
         assert(edgeExists);
-        double edgeLength = g[uv].length;
+        double edgeLength = graph[uv].length;
 
         // Remove vertex from qFrontier
-        if(nv.budget() == mLookahead)
+        if(graph[v].budgetToExtend == mLookahead)
         {
           auto iterQ = qFrontier.find(v);
           if(iterQ != qFrontier.end())
@@ -466,10 +486,9 @@ void LRAstar::updateLazyBand(TG &qUpdate, TF &qExtend, TF &qFrontier)
           isLeaf = true;
         }
 
-        nv.updateCost(g[u].node.cost());
-        nv.updateLazyCost(g[u].node.lazyCost() + edgeLength);
-        nv.updateBudget(g[u].node.budget() + 1);
-        g[v].node = nv;
+        graph[v].costToCome = graph[u].costToCome;
+        graph[v].lazyCostToCome = graph[u].lazyCostToCome + edgeLength;
+        graph[v].budgetToExtend = graph[u].budgetToExtend + 1;
 
         if(isLeaf || v == mGoalVertex)
         {
@@ -478,7 +497,7 @@ void LRAstar::updateLazyBand(TG &qUpdate, TF &qExtend, TF &qFrontier)
           assert(qExtend.find(v) == qExtend.end());
           qExtend.emplace(v);
         }
-        assert(g[v].node.budget() < mLookahead);
+        assert(graph[v].budgetToExtend < mLookahead);
 
         qUpdate.emplace(v);
       }
@@ -486,6 +505,8 @@ void LRAstar::updateLazyBand(TG &qUpdate, TF &qExtend, TF &qFrontier)
   }
 }
 
+// ===========================================================================================
+// Rewire
 template<class TG, class TF>
 void LRAstar::rewireLazyBand(TG &qRewire, TF &qExtend, TF &qFrontier)
 {
@@ -498,7 +519,7 @@ void LRAstar::rewireLazyBand(TG &qRewire, TF &qExtend, TF &qFrontier)
     qRewire.erase(qRewire.begin());
 
     // Add all the children of the current node to qRewire and empty the children vector
-    std::vector<Vertex>& children = g[v].node.children();
+    std::vector<Vertex>& children = graph[v].children;
     for(auto iterV = children.begin(); iterV != children.end(); ++iterV)
     {
       qRewire.emplace(*iterV);
@@ -521,13 +542,13 @@ void LRAstar::rewireLazyBand(TG &qRewire, TF &qExtend, TF &qFrontier)
     assert(qExtend.find(v) == qExtend.end());
 
     // Assign default values
-    g[v].node.updateParent(v);
-    g[v].node.updateCost(std::numeric_limits<double>::max());
-    g[v].node.updateLazyCost(0);
-    g[v].node.updateBudget(0);
+    graph[v].parent = v;
+    graph[v].costToCome = std::numeric_limits<double>::max();
+    graph[v].lazyCostToCome = 0;
+    graph[v].budgetToExtend = 0;
 
     // Mark it as not visited
-    g[v].visited = false;  
+    graph[v].visited = false;
   }
 
   // Record number of edge rewires
@@ -537,50 +558,50 @@ void LRAstar::rewireLazyBand(TG &qRewire, TF &qExtend, TF &qFrontier)
   for(auto iterS = mSetRewire.begin(); iterS != mSetRewire.end(); ++iterS)
   {
     Vertex v = *iterS;
-    if(g[v].vertexStatus == CollisionStatus::BLOCKED)
+    if(graph[v].status == CollisionStatus::BLOCKED)
       continue;
 
     NeighborIter ni, ni_end;
-    for(boost::tie(ni, ni_end) = adjacent_vertices(v, g); ni != ni_end; ++ni)
+    for(boost::tie(ni, ni_end) = adjacent_vertices(v, graph); ni != ni_end; ++ni)
     {
       Vertex u = *ni; // Possible parent
 
-      if(g[u].vertexStatus == CollisionStatus::BLOCKED)
+      if(graph[u].status == CollisionStatus::BLOCKED)
         continue;
 
       if(u == mGoalVertex) // Do not rewire to goal vertex
         continue;
-      
-      if(g[u].node.cost() == std::numeric_limits<double>::max())
+
+      if(graph[u].costToCome == std::numeric_limits<double>::max())
         continue;
 
-      if (g[u].visited == false)
+      if (graph[u].visited == false)
         continue;
 
-      if(g[u].node.budget() == mLookahead) // parent should have budget
+      if(graph[u].budgetToExtend == mLookahead) // parent should have budget
         continue;
 
       if(qExtend.find(u) != qExtend.end())
         continue;
 
       assert (mSetRewire.find(u) == mSetRewire.end());
-      assert(v != g[u].node.parent()); // entire subtree should have been collected
+      assert(v != graph[u].parent); // entire subtree should have been collected
 
       Edge uv;
       bool edgeExists;
-      boost::tie(uv, edgeExists) = edge(u, v, g);
+      boost::tie(uv, edgeExists) = edge(u, v, graph);
       assert(edgeExists);
-      double edgeLength = g[uv].length;
-      
-      if(g[uv].edgeStatus == CollisionStatus::FREE)
+      double edgeLength = graph[uv].length;
+
+      if(graph[uv].status == CollisionStatus::FREE)
       {
         if(estimateCostToCome(v) > estimateCostToCome(u) + edgeLength ||
-          (estimateCostToCome(v) == estimateCostToCome(u) + edgeLength && u < g[v].node.parent()))
+          (estimateCostToCome(v) == estimateCostToCome(u) + edgeLength && u < graph[v].parent))
         {
-          g[v].node.updateCost(g[u].node.cost());
-          g[v].node.updateLazyCost(g[u].node.lazyCost() + edgeLength);
-          g[v].node.updateParent(u);
-          g[v].node.updateBudget(g[u].node.budget() + 1);
+          graph[v].costToCome = graph[u].costToCome;
+          graph[v].lazyCostToCome = graph[u].lazyCostToCome + edgeLength;
+          graph[v].parent = u;
+          graph[v].budgetToExtend = graph[u].budgetToExtend + 1;
         }
       }
     }
@@ -603,33 +624,33 @@ void LRAstar::rewireLazyBand(TG &qRewire, TF &qExtend, TF &qFrontier)
     Vertex u = *qRewire.begin();
     qRewire.erase(qRewire.begin());
 
-    if(u == g[u].node.parent())
+    if(u == graph[u].parent)
       continue;
 
-    if(estimateTotalCost(g[u].node.parent()) >= cReference)
+    if(estimateTotalCost(graph[u].parent) >= cReference)
     {
-      qExtend.emplace(g[u].node.parent());
+      qExtend.emplace(graph[u].parent);
       continue;
     }
 
     // Since valid parent is found, mark as visited
-    g[u].visited = true;
+    graph[u].visited = true;
 
     // Let the parent know of its new child
-    Vertex p = g[u].node.parent();
-    std::vector<Vertex>& children = g[p].node.children();
+    Vertex p = graph[u].parent;
+    std::vector<Vertex>& children = graph[p].children;
     children.emplace_back(u);
 
-    if(g[u].node.budget() < mLookahead && u != mGoalVertex)
+    if(graph[u].budgetToExtend < mLookahead && u != mGoalVertex)
     {
       assert(qExtend.find(u) == qExtend.end());
       assert(qExtend.find(p) == qExtend.end());
-      assert(g[u].node.children().empty());
+      assert(graph[u].children.empty());
 
       qExtend.emplace(u);
     }
 
-    if(g[u].node.budget() == mLookahead || u == mGoalVertex)
+    if(graph[u].budgetToExtend == mLookahead || u == mGoalVertex)
     {
       assert(qFrontier.find(u) == qFrontier.end());
       qFrontier.emplace(u);
@@ -637,11 +658,11 @@ void LRAstar::rewireLazyBand(TG &qRewire, TF &qExtend, TF &qFrontier)
     }
 
     NeighborIter ni, ni_end;
-    for (boost::tie(ni, ni_end) = adjacent_vertices(u, g); ni != ni_end; ++ni)
+    for (boost::tie(ni, ni_end) = adjacent_vertices(u, graph); ni != ni_end; ++ni)
     {
       Vertex v = *ni;
 
-      if(g[v].vertexStatus == CollisionStatus::BLOCKED)
+      if(graph[v].status == CollisionStatus::BLOCKED)
         continue;
 
       // Vertex needs to be in set to update
@@ -649,37 +670,37 @@ void LRAstar::rewireLazyBand(TG &qRewire, TF &qExtend, TF &qFrontier)
         continue;
 
       assert(v != p); // Enforce prevention of loops - parent should not be in Qrewire
-      
+
       Edge uv;
       bool edgeExists;
-      boost::tie(uv, edgeExists) = edge(u, v, g);
+      boost::tie(uv, edgeExists) = edge(u, v, graph);
       assert(edgeExists);
-      double edgeLength = g[uv].length;
+      double edgeLength = graph[uv].length;
 
-      if(g[uv].edgeStatus == CollisionStatus::FREE)
+      if(graph[uv].status == CollisionStatus::FREE)
       {
         if(estimateCostToCome(v) > estimateCostToCome(u) + edgeLength ||
-          (estimateCostToCome(v) == estimateCostToCome(u) + edgeLength && u < g[v].node.parent()))
+          (estimateCostToCome(v) == estimateCostToCome(u) + edgeLength && u < graph[v].parent))
         {
           if(qExtend.find(u) != qExtend.end())
           {
             qRewire.erase(v);
-            g[v].visited = false;
-            g[v].node.updateCost(std::numeric_limits<double>::max());
-            g[v].node.updateParent(v);
+            graph[v].visited = false;
+            graph[v].costToCome = std::numeric_limits<double>::max();
+            graph[v].parent = v;
             qRewire.emplace(v);
             continue;
           }
 
           qRewire.erase(v);
 
-          g[v].node.updateCost(g[u].node.cost());
-          g[v].node.updateLazyCost(g[u].node.lazyCost() + edgeLength);
-          g[v].node.updateParent(u);
-          g[v].node.updateBudget(g[u].node.budget() + 1);
+          graph[v].costToCome = graph[u].costToCome;
+          graph[v].lazyCostToCome = graph[u].lazyCostToCome + edgeLength;
+          graph[v].parent = u;
+          graph[v].budgetToExtend = graph[u].budgetToExtend + 1;
 
-          assert(g[u].node.budget() <  mLookahead);
-          assert(g[v].node.budget() <= mLookahead);
+          assert(graph[u].budgetToExtend <  mLookahead);
+          assert(graph[v].budgetToExtend <= mLookahead);
 
           qRewire.emplace(v);
         }
@@ -689,18 +710,20 @@ void LRAstar::rewireLazyBand(TG &qRewire, TF &qExtend, TF &qFrontier)
   mSetRewire.clear();
 }
 
+// ===========================================================================================
+// Evaluate
 template<class TG, class TF>
 bool LRAstar::evaluatePath(std::vector<Vertex> path, TG &qUpdate, TG &qRewire, TF &qExtend, TF &qFrontier)
 {
   assert(path.size() != 1);
 
-  // Increase beta to alpha if goal is on current path
+  // Increase greediness to lookahead if goal is on current path
   int greediness;
   if(path[0] == mGoalVertex)
     greediness = mLookahead;
   else
     greediness = mGreediness;
-  
+
   bool isLeaf;
   for(auto iterV = path.rbegin(); iterV != path.rbegin() + greediness && iterV != path.rend(); ++iterV)
   {
@@ -712,14 +735,14 @@ bool LRAstar::evaluatePath(std::vector<Vertex> path, TG &qUpdate, TG &qRewire, T
     // Determine the edge length
     Edge uv;
     bool edgeExists;
-    boost::tie(uv, edgeExists) = edge(u, v, g);
+    boost::tie(uv, edgeExists) = edge(u, v, graph);
     assert(edgeExists);
-    double edgeLength = g[uv].length;
+    double edgeLength = graph[uv].length;
 
     // Actual Collision Check
     if (!evaluateEdge(uv))
     {
-      std::vector<Vertex>& children = g[u].node.children();
+      std::vector<Vertex>& children = graph[u].children;
       std::size_t indx;
       for(indx = 0; indx != children.size(); ++indx)
       {
@@ -728,18 +751,18 @@ bool LRAstar::evaluatePath(std::vector<Vertex> path, TG &qUpdate, TG &qRewire, T
       }
       assert(indx != children.size()); // child has been found
 
-      // Remove child 
+      // Remove child
       if (indx != children.size()-1)
           children[indx] = children.back();
       children.pop_back();
 
       qRewire.emplace(v);
-      break;   
+      break;
     }
 
     else
     {
-      if(g[v].node.budget() == mLookahead)
+      if (graph[v].budgetToExtend == mLookahead)
       {
         auto iterQ = qFrontier.find(v);
         if(iterQ != qFrontier.end())
@@ -747,14 +770,14 @@ bool LRAstar::evaluatePath(std::vector<Vertex> path, TG &qUpdate, TG &qRewire, T
         isLeaf = true;
       }
 
-      g[v].node.updateBudget(0);
-      g[v].node.updateLazyCost(0);
-      g[v].node.updateCost(g[u].node.cost() + edgeLength);
+      graph[v].budgetToExtend = 0;
+      graph[v].lazyCostToCome = 0;
+      graph[v].costToCome = graph[u].costToCome + edgeLength;
 
       assert(qFrontier.find(v) == qFrontier.end());
       assert(qExtend.find(v) == qExtend.end());
 
-      if(isLeaf)
+      if (isLeaf)
       {
         assert(qExtend.find(u) == qExtend.end());
         assert(qFrontier.find(u) == qFrontier.end());
@@ -771,204 +794,204 @@ bool LRAstar::evaluatePath(std::vector<Vertex> path, TG &qUpdate, TG &qRewire, T
   return false;
 }
 
-
-// OMPL Methods
-void LRAstar::setProblemDefinition(const ompl::base::ProblemDefinitionPtr &pdef)
+// ===========================================================================================
+// Setters
+void LRAstar::setLookahead(double lookahead)
 {
-  ompl::base::Planner::setProblemDefinition(pdef);
+  mLookahead = lookahead;
+}
 
-  StateWrapperPtr startState(new StateWrapper(mSpace));
-  mSpace->copyState(startState->state, pdef_->getStartState(0));
+void LRAstar::setGreediness(double greediness)
+{
+  mGreediness = greediness;
+}
 
-  StateWrapperPtr goalState(new StateWrapper(mSpace));
-  mSpace->copyState(goalState->state, pdef_->getGoal()->as<ompl::base::GoalState>()->getState());
+void LRAstar::setRoadmapFileName(const std::string& roadmapFileName)
+{
+  mRoadmapFileName = roadmapFileName;
+}
+
+void LRAstar::setConnectionRadius(double connectionRadius)
+{
+  mConnectionRadius = connectionRadius;
+}
+
+// ===========================================================================================
+// Getters
+double LRAstar::getLookahead() const
+{
+  return mLookahead;
+}
+
+double LRAstar::getGreediness() const
+{
+  return mGreediness;
+}
+
+std::string LRAstar::getRoadmapFileName() const
+{
+  return mRoadmapFileName;
+}
+
+double LRAstar::getConnectionRadius() const
+{
+  return mConnectionRadius;
+}
+
+LRAstar::Vertex LRAstar::getStartVertex() const
+{
+  return mStartVertex;
+}
+
+LRAstar::Vertex LRAstar::getGoalVertex() const
+{
+  return mGoalVertex;
+}
+
+double LRAstar::getBestPathCost() const
+{
+  return mBestPathCost;
+}
+
+// ===========================================================================================
+ompl::base::PathPtr LRAstar::constructSolution(const Vertex &start, const Vertex &goal) const
+{
+  std::set<Vertex> seen;
+
+  ompl::geometric::PathGeometric *path = new ompl::geometric::PathGeometric(si_);
+  Vertex v = goal;
+  while (v != start)
+  {
+    if (seen.find(v) != seen.end())
+    {
+      OMPL_ERROR("infinite loop");
+      break;
+    }
+
+    seen.insert(v);
+    path->append(graph[v].state->state);
+    v = graph[v].parent;
+  }
+
+  if (v == start)
+  {
+    path->append(graph[start].state->state);
+  }
+  path->reverse();
+  return ompl::base::PathPtr(path);
+}
+
+// ===========================================================================================
+void LRAstar::initializeEdgePoints(const Edge& e)
+{
+  auto startState = graph[source(e,graph)].state->state;
+  auto endState = graph[target(e,graph)].state->state;
+
+  unsigned int nStates = static_cast<unsigned int>(std::floor(graph[e].length / (2.0*mCheckRadius)));
+  
+  // Just start and goal
+  if(nStates < 2u)
+  {
+    nStates = 2u;
+  }
+
+  graph[e].edgeStates.resize(nStates);
+
+  for(unsigned int i = 0; i < nStates; i++)
+  {
+    graph[e].edgeStates[i].reset(new utils::StateWrapper(mSpace));
+  }
+
+  const std::vector<std::pair<int,int>>& order = mBisectPermObj.get(nStates);
+
+  for(unsigned int i = 0; i < nStates; i++)
+  {
+    mSpace->interpolate(startState, endState,
+      1.0*(1+order[i].first)/(nStates+1), graph[e].edgeStates[i]->state);
+  }
+}
+
+// ===========================================================================================
+bool LRAstar::evaluateEdge(const LRAstar::Edge& e)
+{
+  // March along edge states with highest resolution
+  mNumEdgeEvals++;
 
   auto validityChecker = si_->getStateValidityChecker();
-
-  if(!validityChecker->isValid(startState->state))
-    throw ompl::Exception("Start configuration is in collision!");
-  if(!validityChecker->isValid(goalState->state))
-    throw ompl::Exception("Goal configuration is in collision!");
-
-  // Add start and goal vertices to the graph
-  mStartVertex = boost::add_vertex(g);
-  g[mStartVertex].v_state = startState;
-  g[mStartVertex].vertexStatus = CollisionStatus::FREE;
-  g[mStartVertex].visited = false;
-  Node* nodeS = new Node();
-  g[mStartVertex].node = *nodeS;
-
-  mGoalVertex = boost::add_vertex(g);
-  g[mGoalVertex].v_state = goalState;
-  g[mGoalVertex].vertexStatus = CollisionStatus::FREE;
-  g[mGoalVertex].visited = false;
-  Node* nodeG = new Node();
-  g[mGoalVertex].node = *nodeG;
-
-  VertexIter vi, vi_end;
-  for (boost::tie(vi, vi_end) = vertices(g); vi != vi_end; ++vi)
-  {
-    double startDist = mSpace->distance(g[*vi].v_state->state, startState->state);
-    double goalDist  = mSpace->distance(g[*vi].v_state->state, goalState->state);
-
-    if (startDist < mConnectionRadius)
-    {
-      if(mStartVertex == *vi)
-        continue;
-      std::pair<LRAstar::Edge,bool> newEdge = boost::add_edge(mStartVertex, *vi, g);
-      g[newEdge.first].length = startDist;
-      g[newEdge.first].edgeStatus = CollisionStatus::FREE;
-      initializeEdgePoints(newEdge.first);
-    }
-    if (goalDist < mConnectionRadius)
-    {
-      if(mGoalVertex == *vi)
-        continue;
-      std::pair<LRAstar::Edge,bool> newEdge = boost::add_edge(mGoalVertex, *vi, g);
-      g[newEdge.first].length = goalDist;
-      g[newEdge.first].edgeStatus = CollisionStatus::FREE;
-      initializeEdgePoints(newEdge.first);
-    }
-  }
-}
-
-void LRAstar::setup()
-{
-  ompl::base::Planner::setup();
-
-  if(mRoadmapFileName == "")
-    throw ompl::Exception("Roadmap name must be set!");
-
-  roadmapPtr = boost::shared_ptr<RoadmapFromFile<Graph, VPStateMap, StateWrapper, EPLengthMap>>
-                (new RoadmapFromFile<Graph, VPStateMap, StateWrapper, EPLengthMap>
-                (mSpace, mRoadmapFileName));
-
-  roadmapPtr->generate(g, get(&VProp::v_state, g),
-                          get(&EProp::length, g));
-
-  VPVisitedMap visitedMap = get(&VProp::visited, g);
-  VPStatusMap vertexStatusMap = get(&VProp::vertexStatus, g);
-  VPVertexNodeMap nodeMap = get(&VProp::node, g);
-  EPStatusMap edgeStatusMap = get(&EProp::edgeStatus, g);
-
-  // Set Default Values
-  VertexIter vi, vi_end;
-  for (boost::tie(vi, vi_end) = vertices(g); vi != vi_end; ++vi)
-  {
-    visitedMap[*vi] = false;
-    vertexStatusMap[*vi] = CollisionStatus::FREE;
-    Node* node = new Node();
-    nodeMap[*vi] = *node;
-  }
-
-  EdgeIter ei, ei_end;
-  for (boost::tie(ei, ei_end) = edges(g); ei != ei_end; ++ei)
-  {
-    edgeStatusMap[*ei] = CollisionStatus::FREE;
-    initializeEdgePoints(*ei);
-  }
-}
-
-ompl::base::PlannerStatus LRAstar::solve(const ompl::base::PlannerTerminationCondition & ptc)
-{
-
-  // Priority Function: g-value
-  auto cmpGValue = [&](Vertex left, Vertex right)
-  {
-      double estimateLeft = estimateCostToCome(left);
-      double estimateRight = estimateCostToCome(right);
-
-      if (estimateRight - estimateLeft > 0)
-          return true;
-      if (estimateLeft - estimateRight > 0)
-          return false;
-      if (left < right)
-          return true;
-      else
-          return false; 
-  };
-
-  // Priority Function: f-value
-  auto cmpFValue = [&](Vertex left, Vertex right)
-  {
-      double estimateLeft = estimateTotalCost(left);
-      double estimateRight = estimateTotalCost(right);
-
-      if (estimateRight - estimateLeft > 0)
-          return true;
-      if (estimateLeft - estimateRight > 0)
-          return false;
-      if (left < right)
-          return true;
-      else
-          return false; 
-  };
-
-  std::set<Vertex, decltype(cmpGValue)> qUpdate(cmpGValue);
-  std::set<Vertex, decltype(cmpGValue)> qRewire(cmpGValue);
-  std::set<Vertex, decltype(cmpFValue)> qExtend(cmpFValue);
-  std::set<Vertex, decltype(cmpFValue)> qFrontier(cmpFValue);
-
-  bool solutionFound = false;
-
-  // Track the running time of the algorithm
-  std::chrono::time_point<std::chrono::system_clock> startTime{std::chrono::system_clock::now()};
-  if(mStartVertex == mGoalVertex)
-  {
-      OMPL_INFORM("Solution Found!");
-      solutionFound = true;        
-  }
-
-  Node nStart(mStartVertex, -1, {}, 0.0, 0.0, 0.0, heuristicFunction(mStartVertex));
-  g[mStartVertex].node = nStart;
-  g[mStartVertex].visited = true;
-  qExtend.insert(mStartVertex);
-
-  extendLazyBand(qExtend, qFrontier);
-
-  std::vector<Vertex> path;
-  while((!qFrontier.empty() && !solutionFound) || !qExtend.empty())
-  {
-    Vertex vTop = *qFrontier.begin();
-    qFrontier.erase(qFrontier.begin());
-    assert(g[vTop].node.budget() == mLookahead || vTop == mGoalVertex);
-
-    path = pathToBorder(vTop);
-    bool goalFound = evaluatePath(path, qUpdate, qRewire, qExtend, qFrontier);
-
-    if(goalFound)
-    {
-        OMPL_INFORM("Solution Found!");
-        solutionFound = true;
-        break;
-    }
-    updateLazyBand(qUpdate, qExtend, qFrontier);
-    rewireLazyBand(qRewire, qExtend, qFrontier);
-    extendLazyBand(qExtend, qFrontier);
-  }
-
-  std::chrono::time_point<std::chrono::system_clock> endTime{std::chrono::system_clock::now()};
-  std::chrono::duration<double> elapsedSeconds{endTime-startTime};
-  mSearchTime = elapsedSeconds.count() - mCollCheckTime;
-
-  if(solutionFound)
-  {
-    mBestPathCost = estimateCostToCome(mGoalVertex);
-    pdef_->addSolutionPath(constructSolution(mStartVertex, mGoalVertex));
-
-    OMPL_INFORM("Graph Operations Time:     %f seconds", mSearchTime);
-    OMPL_INFORM("Edge Evaluations Time:     %f seconds", mCollCheckTime);
-    OMPL_INFORM("Total Search Time:         %f seconds", mSearchTime + mCollCheckTime);
-
-    OMPL_INFORM("Number of Edges Rewired:     %d", mNumEdgeRewires);
-    OMPL_INFORM("Number of Edges Evaluated:   %d", mNumEdgeEvals);
-    OMPL_INFORM("Cost of goal:                %f", mBestPathCost);
-
-    return ompl::base::PlannerStatus::EXACT_SOLUTION;
-  }
   
-  else
-    OMPL_INFORM("Solution NOT Found");
+  Vertex startVertex = source(e,graph);
+  Vertex endVertex   = target(e,graph);
+  auto startState = graph[startVertex].state->state;
+  auto endState = graph[endVertex].state->state;
+
+  auto nStates = graph[e].edgeStates.size();
+
+  bool checkResult;
+  
+  // Evaluate Start and End States [we only assume states in self-collision are pruned out]
+  checkResult = validityChecker->isValid(startState);
+  if(!checkResult)
+  {
+    graph[startVertex].status = CollisionStatus::BLOCKED;
+    return checkResult;
+  }
+  checkResult = validityChecker->isValid(endState);
+  if(!checkResult)
+  {
+    graph[endVertex].status = CollisionStatus::BLOCKED;
+    return checkResult;
+  }
+
+  // Evaluate the States in between
+  for(unsigned int i = 1; i < nStates-1; i++)
+  {
+    checkResult = validityChecker->isValid(graph[e].edgeStates[i]->state);
+    if(!checkResult)
+    {
+      graph[e].status = CollisionStatus::BLOCKED;
+      graph[e].length = std::numeric_limits<double>::max();
+      break;
+    }
+  }
+  return checkResult;
 }
 
-} // namespace AB_LRAstar
+// ===========================================================================================
+using Vertex = LRAstar::Vertex;
+std::vector<Vertex> LRAstar::pathToBorder(Vertex v) const
+{
+  std::vector<Vertex> path;
+  path.emplace_back(v);
+  double currentBudget = graph[v].budgetToExtend;
+
+  while(currentBudget > 0)
+  {
+    v = graph[v].parent;
+    assert(graph[v].budgetToExtend == currentBudget - 1);
+    path.emplace_back(v);
+    currentBudget = graph[v].budgetToExtend;
+
+    assert(graph[v].visited);
+    assert(graph[v].parent != v);
+    assert(graph[v].budgetToExtend <= mLookahead);
+  }
+  return path;
+}
+
+// ===========================================================================================
+double LRAstar::estimateCostToCome(Vertex v) const
+{
+  return graph[v].costToCome + graph[v].lazyCostToCome;
+}
+
+double LRAstar::heuristicFunction(Vertex v) const
+{
+  return mSpace->distance(graph[v].state->state, graph[mGoalVertex].state->state);
+}
+
+double LRAstar::estimateTotalCost(Vertex v) const
+{
+  return estimateCostToCome(v) + heuristicFunction(v);
+}
+
+} // namespace LRAstar
