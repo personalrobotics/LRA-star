@@ -75,8 +75,8 @@ LRAstar::LRAstar(const ompl::base::SpaceInformationPtr &si,
   if (mRoadmapFileName == "")
     throw std::invalid_argument("Provide a non-empty path to roadmap.");
 
-  if (mLookahead <= 1.0)
-    throw std::invalid_argument("Lookahead should be greater than unity.");
+  if (mLookahead < 1.0)
+    throw std::invalid_argument("Lookahead should be greater than or equal to 1.");
 
   if (mGreediness > mLookahead)
     throw std::invalid_argument("Greediness is bounded above by lookahead.");
@@ -90,6 +90,10 @@ LRAstar::~LRAstar()
 // ===========================================================================================
 void LRAstar::setup()
 {
+  // Check if already setup.
+  if (static_cast<bool>(ompl::base::Planner::setup_))
+    return;
+
   ompl::base::Planner::setup();
 
   roadmapPtr = boost::shared_ptr<utils::RoadmapFromFile<Graph, VPStateMap, utils::StateWrapper, EPLengthMap>>
@@ -283,7 +287,7 @@ ompl::base::PlannerStatus LRAstar::solve(const ompl::base::PlannerTerminationCon
   {
     Vertex vTop = *qFrontier.begin();
     qFrontier.erase(qFrontier.begin());
-    assert(graph[vTop].budgetToExtend() == mLookahead || vTop == mGoalVertex);
+    assert(graph[vTop].budgetToExtend == mLookahead || vTop == mGoalVertex);
 
     path = pathToBorder(vTop);
     bool goalFound = evaluatePath(path, qUpdate, qRewire, qExtend, qFrontier);
@@ -545,7 +549,7 @@ void LRAstar::updateLazyBand(TG &qUpdate, TF &qExtend, TF &qFrontier)
 template<class TG, class TF>
 void LRAstar::rewireLazyBand(TG &qRewire, TF &qExtend, TF &qFrontier)
 {
-  /*assert(mSetRewire.empty());
+  assert(mSetRewire.empty());
 
   // 1. Collect all the nodes that need to be rewired
   while(!qRewire.empty())
@@ -554,7 +558,7 @@ void LRAstar::rewireLazyBand(TG &qRewire, TF &qExtend, TF &qFrontier)
     qRewire.erase(qRewire.begin());
 
     // Add all the children of the current node to qRewire and empty the children vector
-    std::vector<Vertex>& children = g[v].node.children();
+    std::vector<Vertex>& children = graph[v].children;
     for(auto iterV = children.begin(); iterV != children.end(); ++iterV)
     {
       qRewire.emplace(*iterV);
@@ -577,13 +581,13 @@ void LRAstar::rewireLazyBand(TG &qRewire, TF &qExtend, TF &qFrontier)
     assert(qExtend.find(v) == qExtend.end());
 
     // Assign default values
-    g[v].node.updateParent(v);
-    g[v].node.updateCost(std::numeric_limits<double>::max());
-    g[v].node.updateLazyCost(0);
-    g[v].node.updateBudget(0);
+    graph[v].parent = v;
+    graph[v].costToCome = std::numeric_limits<double>::max();
+    graph[v].lazyCostToCome = 0;
+    graph[v].budgetToExtend = 0;
 
     // Mark it as not visited
-    g[v].visited = false;
+    graph[v].visited = false;
   }
 
   // Record number of edge rewires
@@ -593,50 +597,50 @@ void LRAstar::rewireLazyBand(TG &qRewire, TF &qExtend, TF &qFrontier)
   for(auto iterS = mSetRewire.begin(); iterS != mSetRewire.end(); ++iterS)
   {
     Vertex v = *iterS;
-    if(g[v].status == CollisionStatus::BLOCKED)
+    if(graph[v].status == CollisionStatus::BLOCKED)
       continue;
 
     NeighborIter ni, ni_end;
-    for(boost::tie(ni, ni_end) = adjacent_vertices(v, g); ni != ni_end; ++ni)
+    for(boost::tie(ni, ni_end) = adjacent_vertices(v, graph); ni != ni_end; ++ni)
     {
       Vertex u = *ni; // Possible parent
 
-      if(g[u].status == CollisionStatus::BLOCKED)
+      if(graph[u].status == CollisionStatus::BLOCKED)
         continue;
 
       if(u == mGoalVertex) // Do not rewire to goal vertex
         continue;
 
-      if(g[u].node.cost() == std::numeric_limits<double>::max())
+      if(graph[u].costToCome == std::numeric_limits<double>::max())
         continue;
 
-      if (g[u].visited == false)
+      if (graph[u].visited == false)
         continue;
 
-      if(g[u].node.budget() == mLookahead) // parent should have budget
+      if(graph[u].budgetToExtend == mLookahead) // parent should have budget
         continue;
 
       if(qExtend.find(u) != qExtend.end())
         continue;
 
       assert (mSetRewire.find(u) == mSetRewire.end());
-      assert(v != g[u].node.parent()); // entire subtree should have been collected
+      assert(v != graph[u].parent); // entire subtree should have been collected
 
       Edge uv;
       bool edgeExists;
-      boost::tie(uv, edgeExists) = edge(u, v, g);
+      boost::tie(uv, edgeExists) = edge(u, v, graph);
       assert(edgeExists);
-      double edgeLength = g[uv].length;
+      double edgeLength = graph[uv].length;
 
-      if(g[uv].status == CollisionStatus::FREE)
+      if(graph[uv].status == CollisionStatus::FREE)
       {
         if(estimateCostToCome(v) > estimateCostToCome(u) + edgeLength ||
-          (estimateCostToCome(v) == estimateCostToCome(u) + edgeLength && u < g[v].node.parent()))
+          (estimateCostToCome(v) == estimateCostToCome(u) + edgeLength && u < graph[v].parent))
         {
-          g[v].node.updateCost(g[u].node.cost());
-          g[v].node.updateLazyCost(g[u].node.lazyCost() + edgeLength);
-          g[v].node.updateParent(u);
-          g[v].node.updateBudget(g[u].node.budget() + 1);
+          graph[v].costToCome = graph[u].costToCome;
+          graph[v].lazyCostToCome = graph[u].lazyCostToCome + edgeLength;
+          graph[v].parent = u;
+          graph[v].budgetToExtend = graph[u].budgetToExtend + 1;
         }
       }
     }
@@ -659,33 +663,33 @@ void LRAstar::rewireLazyBand(TG &qRewire, TF &qExtend, TF &qFrontier)
     Vertex u = *qRewire.begin();
     qRewire.erase(qRewire.begin());
 
-    if(u == g[u].node.parent())
+    if(u == graph[u].parent)
       continue;
 
-    if(estimateTotalCost(g[u].node.parent()) >= cReference)
+    if(estimateTotalCost(graph[u].parent) >= cReference)
     {
-      qExtend.emplace(g[u].node.parent());
+      qExtend.emplace(graph[u].parent);
       continue;
     }
 
     // Since valid parent is found, mark as visited
-    g[u].visited = true;
+    graph[u].visited = true;
 
     // Let the parent know of its new child
-    Vertex p = g[u].node.parent();
-    std::vector<Vertex>& children = g[p].node.children();
+    Vertex p = graph[u].parent;
+    std::vector<Vertex>& children = graph[p].children;
     children.emplace_back(u);
 
-    if(g[u].node.budget() < mLookahead && u != mGoalVertex)
+    if(graph[u].budgetToExtend < mLookahead && u != mGoalVertex)
     {
       assert(qExtend.find(u) == qExtend.end());
       assert(qExtend.find(p) == qExtend.end());
-      assert(g[u].node.children().empty());
+      assert(graph[u].children.empty());
 
       qExtend.emplace(u);
     }
 
-    if(g[u].node.budget() == mLookahead || u == mGoalVertex)
+    if(graph[u].budgetToExtend == mLookahead || u == mGoalVertex)
     {
       assert(qFrontier.find(u) == qFrontier.end());
       qFrontier.emplace(u);
@@ -693,11 +697,11 @@ void LRAstar::rewireLazyBand(TG &qRewire, TF &qExtend, TF &qFrontier)
     }
 
     NeighborIter ni, ni_end;
-    for (boost::tie(ni, ni_end) = adjacent_vertices(u, g); ni != ni_end; ++ni)
+    for (boost::tie(ni, ni_end) = adjacent_vertices(u, graph); ni != ni_end; ++ni)
     {
       Vertex v = *ni;
 
-      if(g[v].status == CollisionStatus::BLOCKED)
+      if(graph[v].status == CollisionStatus::BLOCKED)
         continue;
 
       // Vertex needs to be in set to update
@@ -708,41 +712,41 @@ void LRAstar::rewireLazyBand(TG &qRewire, TF &qExtend, TF &qFrontier)
 
       Edge uv;
       bool edgeExists;
-      boost::tie(uv, edgeExists) = edge(u, v, g);
+      boost::tie(uv, edgeExists) = edge(u, v, graph);
       assert(edgeExists);
-      double edgeLength = g[uv].length;
+      double edgeLength = graph[uv].length;
 
-      if(g[uv].status == CollisionStatus::FREE)
+      if(graph[uv].status == CollisionStatus::FREE)
       {
         if(estimateCostToCome(v) > estimateCostToCome(u) + edgeLength ||
-          (estimateCostToCome(v) == estimateCostToCome(u) + edgeLength && u < g[v].node.parent()))
+          (estimateCostToCome(v) == estimateCostToCome(u) + edgeLength && u < graph[v].parent))
         {
           if(qExtend.find(u) != qExtend.end())
           {
             qRewire.erase(v);
-            g[v].visited = false;
-            g[v].node.updateCost(std::numeric_limits<double>::max());
-            g[v].node.updateParent(v);
+            graph[v].visited = false;
+            graph[v].costToCome = std::numeric_limits<double>::max();
+            graph[v].parent = v;
             qRewire.emplace(v);
             continue;
           }
 
           qRewire.erase(v);
 
-          g[v].node.updateCost(g[u].node.cost());
-          g[v].node.updateLazyCost(g[u].node.lazyCost() + edgeLength);
-          g[v].node.updateParent(u);
-          g[v].node.updateBudget(g[u].node.budget() + 1);
+          graph[v].costToCome = graph[u].costToCome;
+          graph[v].lazyCostToCome = graph[u].lazyCostToCome + edgeLength;
+          graph[v].parent = u;
+          graph[v].budgetToExtend = graph[u].budgetToExtend + 1;
 
-          assert(g[u].node.budget() <  mLookahead);
-          assert(g[v].node.budget() <= mLookahead);
+          assert(graph[u].budgetToExtend <  mLookahead);
+          assert(graph[v].budgetToExtend <= mLookahead);
 
           qRewire.emplace(v);
         }
       }
     }
   }
-  mSetRewire.clear();*/
+  mSetRewire.clear();
 }
 
 // ===========================================================================================

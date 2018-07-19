@@ -96,7 +96,7 @@ int main(int argc, char *argv[])
   std::function<bool(const ompl::base::State*)> isStateValid = std::bind(isPointValid, obstacle_file, std::placeholders::_1);
   ompl::base::SpaceInformationPtr si(new ompl::base::SpaceInformation(space));
   si->setStateValidityChecker(isStateValid);
-  si->setup();  
+  si->setup();
 
   // Problem Definition
   ompl::base::ProblemDefinitionPtr pdef(new ompl::base::ProblemDefinition(si));
@@ -115,8 +115,8 @@ int main(int argc, char *argv[])
   // Obtain required data if plan was successful
   if(status == ompl::base::PlannerStatus::EXACT_SOLUTION)
   {
-    auto path = boost::dynamic_pointer_cast<ompl::geometric::PathGeometric>(pdef->getSolutionPath());
-    std::size_t pathSize = path->getStateCount();
+    // Get planner data if required
+    return 0;
   }
 
   return 0;
