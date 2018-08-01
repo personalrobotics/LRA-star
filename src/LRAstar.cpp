@@ -20,9 +20,9 @@ LRAstar::LRAstar(const ompl::base::SpaceInformationPtr &si)
   , mCheckRadius(0.4*mSpace->getLongestValidSegmentLength())
 {
   // Register my setting callbacks.
+  Planner::declareParam<std::string>("roadmapFilename", this, &LRAstar::setRoadmapFileName, &LRAstar::getRoadmapFileName);
   Planner::declareParam<double>("lookahead", this, &LRAstar::setLookahead, &LRAstar::getLookahead, "1.0:1.0:Infinity");
   Planner::declareParam<double>("greediness", this, &LRAstar::setGreediness, &LRAstar::getGreediness, "1.0:1.0:Lookahead");
-  Planner::declareParam<std::string>("roadmapFilename", this, &LRAstar::setRoadmapFileName, &LRAstar::getRoadmapFileName);
 }
 
 LRAstar::LRAstar(const ompl::base::SpaceInformationPtr &si,
@@ -151,9 +151,9 @@ void LRAstar::setProblemDefinition(const ompl::base::ProblemDefinitionPtr &pdef)
   // Add start and goal vertices to the graph
   mStartVertex = boost::add_vertex(graph);
   graph[mStartVertex].state = startState;
-  graph[mGoalVertex].costToCome = 0;
-  graph[mGoalVertex].lazyCostToCome = 0;
-  graph[mGoalVertex].heuristic = heuristicFunction(mStartVertex);
+  graph[mStartVertex].costToCome = 0;
+  graph[mStartVertex].lazyCostToCome = 0;
+  graph[mStartVertex].heuristic = heuristicFunction(mStartVertex);
   graph[mStartVertex].parent = -1;
   graph[mStartVertex].visited = false;
   graph[mStartVertex].status = CollisionStatus::FREE;
