@@ -151,6 +151,11 @@ void LRAstar::setProblemDefinition(const ompl::base::ProblemDefinitionPtr &pdef)
   // Add start and goal vertices to the graph
   mStartVertex = boost::add_vertex(graph);
   graph[mStartVertex].state = startState;
+
+  mGoalVertex = boost::add_vertex(graph);
+  graph[mGoalVertex].state = goalState;
+
+  // Assign default values
   graph[mStartVertex].costToCome = 0;
   graph[mStartVertex].lazyCostToCome = 0;
   graph[mStartVertex].heuristic = heuristicFunction(mStartVertex);
@@ -158,8 +163,6 @@ void LRAstar::setProblemDefinition(const ompl::base::ProblemDefinitionPtr &pdef)
   graph[mStartVertex].visited = false;
   graph[mStartVertex].status = CollisionStatus::FREE;
 
-  mGoalVertex = boost::add_vertex(graph);
-  graph[mGoalVertex].state = goalState;
   graph[mGoalVertex].costToCome = std::numeric_limits<double>::infinity();
   graph[mGoalVertex].lazyCostToCome = std::numeric_limits<double>::infinity();
   graph[mGoalVertex].heuristic = 0;
