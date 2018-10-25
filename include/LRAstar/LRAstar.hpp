@@ -299,16 +299,16 @@ private:
   std::size_t mIteration{0u};
 
   /// Filename for logging shortest paths
-  std::string mShortestPathsFileName;
+  std::string mShortestPathsFileName{""};
 
   /// Filename for logging lazy search tree
-  std::string mLazySearchTreeFileName;
+  std::string mLazySearchTreeFileName{""};
 
   /// Filename for logging edge evaluations
-  std::string mEdgeEvaluationsFileName;
+  std::string mEdgeEvaluationsFileName{""};
 
   /// Filename for logging edge evaluations
-  std::string mFrontierNodeDataFileName;
+  std::string mFrontierNodeDataFileName{""};
 
   ///////////////////////////////////////////////////////////////////
 

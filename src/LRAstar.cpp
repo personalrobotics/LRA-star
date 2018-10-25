@@ -258,19 +258,11 @@ ompl::base::PlannerStatus LRAstar::solve(const ompl::base::PlannerTerminationCon
   std::vector<Vertex> path;
   while((!qFrontier.empty() && !solutionFound) || !qExtend.empty())
   {
-    // Log the lazy search tree
-    // logLazySearchTree();
-    if (mFrontierNodeDataFileName != "")
-      logFrontierNodeData(qFrontier);
-
     Vertex vTop = *qFrontier.begin();
     qFrontier.erase(qFrontier.begin());
     assert(graph[vTop].budgetToExtend == mLookahead || vTop == mGoalVertex);
 
     path = pathToBorder(vTop);
-
-    // Log the shortest path
-    // logPath(path);
 
     bool goalFound = evaluatePath(path, qUpdate, qRewire, qExtend, qFrontier);
 
@@ -851,28 +843,24 @@ void LRAstar::setCheckRadius(double checkRadius)
   mCheckRadius = checkRadius;
 }
 
-void LRAstar::setShortestPathFileName(std::string name)
+void LRAstar::setShortestPathFileName(std::string path)
 {
-  std::string sourceName = "/home/adityavk/research-ws/src/planning_dataset/results/forward/search/";
-  mShortestPathsFileName = sourceName + std::to_string((int)mLookahead) + '_' + name;
+  mShortestPathsFileName = path;
 }
 
-void LRAstar::setLazySearchTreeFileName(std::string name)
+void LRAstar::setLazySearchTreeFileName(std::string path)
 {
-  std::string sourceName = "/home/adityavk/research-ws/src/planning_dataset/results/forward/search/";
-  mLazySearchTreeFileName = sourceName + std::to_string((int)mLookahead) + '_' + name;
+  mLazySearchTreeFileName = path;
 }
 
-void LRAstar::setEdgeEvaluationsFileName(std::string name)
+void LRAstar::setEdgeEvaluationsFileName(std::string path)
 {
-  std::string sourceName = "/home/adityavk/research-ws/src/planning_dataset/results/forward/search/";
-  mEdgeEvaluationsFileName = sourceName + std::to_string((int)mLookahead) + '_' + name;
+  mEdgeEvaluationsFileName = path;
 }
 
-void LRAstar::setFrontierNodeDataFileName(std::string name)
+void LRAstar::setFrontierNodeDataFileName(std::string path)
 {
-  std::string sourceName = "/home/adityavk/research-ws/src/planning_dataset/results/forward/search/";
-  mFrontierNodeDataFileName = sourceName + std::to_string((int)mLookahead) + '_' + name;
+  mFrontierNodeDataFileName = path;
 }
 
 // ===========================================================================================
@@ -1047,7 +1035,6 @@ bool LRAstar::evaluateEdge(const LRAstar::Edge& e)
   std::chrono::duration<double> elapsedSeconds{endEvaluationTime-startEvaluationTime};
   mEdgeEvaluationsTime += elapsedSeconds.count();
 
-  // logEdgeEvaluation(startVertex, endVertex, checkResult);
   return checkResult;
 }
 
