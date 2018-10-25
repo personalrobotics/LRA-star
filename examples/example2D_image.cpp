@@ -109,10 +109,6 @@ int main(int argc, char *argv[])
       ("help,h", "produce help message")
       ("type,o", po::value<std::string>()->required(), "one_wall/two_wall")
       ("index,i", po::value<std::string>()->required(), "world index")
-      ("shortestPathFile,p",po::value<std::string>()->default_value(""), "Path to Shortest Paths Log")
-      ("lazySearchTreeFile,b",po::value<std::string>()->default_value(""), "Path to Lazy Search Tree Log")
-      ("edgeEvaluationsFile,e",po::value<std::string>()->default_value(""), "Path to Edge Evaluations Log")
-      ("frontierNodeDataFile,f",po::value<std::string>()->default_value(""), "Path to Frontier Node Log")
       ("source,s", po::value<std::vector<float> >()->multitoken(), "source configuration")
       ("target,t", po::value<std::vector<float> >()->multitoken(), "target configuration")
       ("lookahead,l", po::value<double>()->default_value(1.0), "Lazy Lookahead")
@@ -133,10 +129,6 @@ int main(int argc, char *argv[])
   double lookahead(vm["lookahead"].as<double>());
   std::string obstacle_type(vm["type"].as<std::string>());
   std::string obstacle_index(vm["index"].as<std::string>());
-  std::string sp_file(vm["shortestPathFile"].as<std::string>());
-  std::string lst_file(vm["lazySearchTreeFile"].as<std::string>());
-  std::string ee_file(vm["edgeEvaluationsFile"].as<std::string>());
-  std::string frontier_file(vm["frontierNodeDataFile"].as<std::string>());
   std::vector<float> source(vm["source"].as<std::vector< float> >());
   std::vector<float> target(vm["target"].as<std::vector< float> >());
   bool display(vm["display"].as<bool>());
@@ -150,7 +142,8 @@ int main(int argc, char *argv[])
   std::string graph_file = default_graph_location + obstacle_type + "/graph_priors.graphml";
 
   // Define the state space: R^2
-  boost::shared_ptr<ompl::base::RealVectorStateSpace> space(new ompl::base::RealVectorStateSpace(2));
+  boost::shared_ptr<ompl::base::RealVectorStateSpace> space(
+                                                      new ompl::base::RealVectorStateSpace(2));
   space->as<ompl::base::RealVectorStateSpace>()->setBounds(0.0, 1.0);
   space->setLongestValidSegmentFraction(0.1 / space->getMaximumExtent());
   space->setup();
@@ -170,15 +163,6 @@ int main(int argc, char *argv[])
   // Setup planner
   LRAstar::LRAstar planner(si, graph_file, lookahead);
 
-  if (sp_file != "")
-    planner.setShortestPathFileName(sp_file);
-  if (lst_file != "")
-    planner.setLazySearchTreeFileName(lst_file);
-  if (ee_file != "")
-    planner.setEdgeEvaluationsFileName(ee_file);
-  if (frontier_file != "")
-    planner.setFrontierNodeDataFileName(frontier_file);
-
   planner.setup();
   planner.setProblemDefinition(pdef);
 
@@ -191,28 +175,16 @@ int main(int argc, char *argv[])
     // Display path and specify path size
     if (status == ompl::base::PlannerStatus::EXACT_SOLUTION)
     {
-      auto path = boost::dynamic_pointer_cast<ompl::geometric::PathGeometric>(pdef->getSolutionPath());
-      std::cout << path->getStateCount() << std::endl;
+      auto path = boost::dynamic_pointer_cast<ompl::geometric::PathGeometric>(
+                                                              pdef->getSolutionPath());
       displayPath(obstacle_file, path);
     }
   }
   else
   {
-    // Obtain required data if plan was successful
-    std::string default_save_location = "/home/adityavk/research-ws/src/planning_dataset/results/forward/search/";
-    std::string save_location = default_save_location + obstacle_type + "/" + obstacle_index + ".txt";
-    if(status == ompl::base::PlannerStatus::EXACT_SOLUTION)
-    {
-      // Get planner data if required
-      std::ofstream logFile;
-      logFile.open(save_location, std::ios_base::app);
-      logFile << graph_file << std::endl;
-      logFile << obstacle_file << std::endl;
-      logFile << planner.getLookahead() << " " << planner.getBestPathCost() << " "
-              << planner.getNumEdgeEvaluations() << " " << planner.getNumEdgeRewires() << " "
-              << planner.getEdgeEvaluationsTime() << " " << planner.getSearchTime() << std::endl;
-      return 0;
-    }
+    // Get planner data if required
+    std::cout << "Exiting Cleanly" << std::endl;
   }
+
   return 0;
 }

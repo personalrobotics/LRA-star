@@ -35,6 +35,10 @@ LRAstar::LRAstar(const ompl::base::SpaceInformationPtr &si,
   , mConnectionRadius(0.04)
   , mCheckRadius(0.005*mConnectionRadius)
 {
+
+  // In case lookahead is set to -1
+  setLookahead(mLookahead);
+
   if (mRoadmapFileName == "")
     throw std::invalid_argument("Provide a non-empty path to roadmap.");
 
@@ -292,7 +296,8 @@ ompl::base::PlannerStatus LRAstar::solve(const ompl::base::PlannerTerminationCon
     mBestPathCost = estimateCostToCome(mGoalVertex);
     pdef_->addSolutionPath(constructSolution(mStartVertex, mGoalVertex));
 
-    OMPL_INFORM("Lookahead:                   %f", mLookahead);
+    OMPL_INFORM("Lookahead:                   %f", (mLookahead == 
+                                                    std::numeric_limits<double>::max()) ? -1 : mLookahead);
     OMPL_INFORM("Number of Edges Rewired:     %d", mNumEdgeRewires);
     OMPL_INFORM("Number of Edges Evaluated:   %d", mNumEdgeEvals);
     OMPL_INFORM("Cost of goal:                %f", mBestPathCost);
@@ -825,7 +830,10 @@ bool LRAstar::evaluatePath(std::vector<Vertex> path, TG &qUpdate, TG &qRewire, T
 // Setters
 void LRAstar::setLookahead(double lookahead)
 {
-  mLookahead = lookahead;
+  if (lookahead == -1)
+    mLookahead = std::numeric_limits<double>::max();
+  else
+    mLookahead = lookahead;
 }
 
 void LRAstar::setRoadmapFileName(const std::string& roadmapFileName)

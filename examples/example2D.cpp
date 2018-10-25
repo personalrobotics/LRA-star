@@ -26,11 +26,11 @@
 
 namespace po = boost::program_options;
 
-/// Check if the point is within defined hyperrectangle
-/// This is bound to the stateValidityChecker of the ompl StateSpace
-/// \param[in] obstacles The file with obstacles stored
-/// \param[in] state The ompl state to check for validity
-/// \return True if the state is collision-free
+/// Check if the point is in collision.
+/// This is bound to the stateValidityChecker of the ompl StateSpace.
+/// \param[in] obstacles The file with obstacles stored.
+/// \param[in] state The ompl state to check for validity.
+/// \return True if the state is collision-free.
 bool isPointValid(std::string obstacleFile, const ompl::base::State *state)
 {
   // Read the Obstacle File
@@ -45,6 +45,11 @@ bool isPointValid(std::string obstacleFile, const ompl::base::State *state)
   return true;
 }
 
+/// Makes an OMPL state out of given x and y coordinates
+/// \param[in] space The OMPL statespace.
+/// \param[in] x X-Coordinate
+/// \param[in] y Y-Coordinate
+/// \return OMPL state corresponding to (x, y)
 ompl::base::ScopedState<ompl::base::RealVectorStateSpace>
 make_state(const ompl::base::StateSpacePtr space, double x, double y)
 {
@@ -62,9 +67,6 @@ int main(int argc, char *argv[])
       ("help,h", "produce help message")
       ("graph,g", po::value<std::string>()->required(), "Path to Graph")
       ("obstaclefile,o", po::value<std::string>()->required(), "Path to Obstacles File")
-      ("shortestPathFile,p",po::value<std::string>()->default_value(""), "Path to Shortest Paths Log")
-      ("lazySearchTreeFile,b",po::value<std::string>()->default_value(""), "Path to Lazy Search Tree Log")
-      ("edgeEvaluationsFile,e",po::value<std::string>()->default_value(""), "Path to Edge Evaluations Log")
       ("source,s", po::value<std::vector<float> >()->multitoken(), "source configuration")
       ("target,t", po::value<std::vector<float> >()->multitoken(), "target configuration")
       ("lookahead,l", po::value<double>()->default_value(1.0), "Lazy Lookahead")
@@ -84,9 +86,6 @@ int main(int argc, char *argv[])
   double lookahead(vm["lookahead"].as<double>());
   std::string graph_file(vm["graph"].as<std::string>());
   std::string obstacle_file(vm["obstaclefile"].as<std::string>());
-  std::string sp_file(vm["shortestPathFile"].as<std::string>());
-  std::string lst_file(vm["lazySearchTreeFile"].as<std::string>());
-  std::string ee_file(vm["edgeEvaluationsFile"].as<std::string>());
   std::vector<float> source(vm["source"].as<std::vector< float> >());
   std::vector<float> target(vm["target"].as<std::vector< float> >());
 
@@ -109,9 +108,6 @@ int main(int argc, char *argv[])
 
   // Setup planner
   LRAstar::LRAstar planner(si, graph_file, lookahead);
-  planner.setShortestPathFileName(sp_file);
-  planner.setLazySearchTreeFileName(lst_file);
-  planner.setEdgeEvaluationsFileName(ee_file);
   planner.setup();
   planner.setProblemDefinition(pdef);
 
@@ -120,17 +116,11 @@ int main(int argc, char *argv[])
   status = planner.solve(ompl::base::plannerNonTerminatingCondition());
 
   // Obtain required data if plan was successful
-  if(status == ompl::base::PlannerStatus::EXACT_SOLUTION)
+  if (status == ompl::base::PlannerStatus::EXACT_SOLUTION)
   {
     // Get planner data if required
-    std::ofstream logFile;
-    logFile.open("/home/adityavk/research-ws/src/planning_dataset/results/forward/search/plannerData.txt", std::ios_base::app);
-    logFile << graph_file << std::endl;
-    logFile << obstacle_file << std::endl;
-    logFile << planner.getLookahead() << " " << planner.getBestPathCost() << " " 
-            << planner.getNumEdgeEvaluations() << " " << planner.getNumEdgeRewires() << " "
-            << planner.getEdgeEvaluationsTime() << " " << planner.getSearchTime() << std::endl;
-    return 0;
+    std::cout << "Exiting Cleanly" << std::endl;
   }
+
   return 0;
 }
