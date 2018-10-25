@@ -65,11 +65,11 @@ int main(int argc, char *argv[])
   po::options_description desc("2D Map Planner Options");
   desc.add_options()
       ("help,h", "produce help message")
-      ("graph,g", po::value<std::string>()->required(), "Path to Graph")
-      ("obstaclefile,o", po::value<std::string>()->required(), "Path to Obstacles File")
+      ("graph,g", po::value<std::string>()->default_value(""), "Path to Graph")
+      ("obstaclefile,o", po::value<std::string>()->default_value(""), "Path to Obstacles File")
       ("source,s", po::value<std::vector<float> >()->multitoken(), "source configuration")
       ("target,t", po::value<std::vector<float> >()->multitoken(), "target configuration")
-      ("lookahead,l", po::value<double>()->default_value(1.0), "Lazy Lookahead")
+      ("lookahead,l", po::value<double>()->default_value(-1.0), "Lazy Lookahead")
   ;
 
   // Read arguments
@@ -85,12 +85,17 @@ int main(int argc, char *argv[])
 
   double lookahead(vm["lookahead"].as<double>());
   std::string graph_file(vm["graph"].as<std::string>());
+  if (graph_file == "")
+    graph_file = "src/planning_dataset/sanjiban_data/one_wall/graph_priors.graphml";
   std::string obstacle_file(vm["obstaclefile"].as<std::string>());
+  if (obstacle_file == "")
+    obstacle_file = "src/LRA-star/data/obstacles/Forest2D.txt";
   std::vector<float> source(vm["source"].as<std::vector< float> >());
   std::vector<float> target(vm["target"].as<std::vector< float> >());
 
   // Define the state space: R^2
-  boost::shared_ptr<ompl::base::RealVectorStateSpace> space(new ompl::base::RealVectorStateSpace(2));
+  boost::shared_ptr<ompl::base::RealVectorStateSpace> space(
+    new ompl::base::RealVectorStateSpace(2));
   space->as<ompl::base::RealVectorStateSpace>()->setBounds(0.0, 1.0);
   space->setLongestValidSegmentFraction(0.1 / space->getMaximumExtent());
   space->setup();

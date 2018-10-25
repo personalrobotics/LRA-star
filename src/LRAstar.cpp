@@ -87,7 +87,6 @@ void LRAstar::setup()
   {
     graph[*ei].isEvaluated = false;
     graph[*ei].status = CollisionStatus::FREE;
-    initializeEdgePoints(*ei);
   }
 
   mBestPathCost = std::numeric_limits<double>::infinity();
@@ -114,7 +113,6 @@ void LRAstar::clear()
   {
     graph[*ei].isEvaluated = false;
     graph[*ei].status = CollisionStatus::FREE;
-    initializeEdgePoints(*ei);
   }
 
   // Internal evaluation variables.
@@ -188,7 +186,6 @@ void LRAstar::setProblemDefinition(const ompl::base::ProblemDefinitionPtr &pdef)
       graph[newEdge.first].prior = 1.0;
       graph[newEdge.first].isEvaluated = false;
       graph[newEdge.first].status = CollisionStatus::FREE;
-      initializeEdgePoints(newEdge.first);
     }
 
     if (goalDist < mConnectionRadius)
@@ -200,7 +197,6 @@ void LRAstar::setProblemDefinition(const ompl::base::ProblemDefinitionPtr &pdef)
       graph[newEdge.first].prior = 1.0;
       graph[newEdge.first].isEvaluated = false;
       graph[newEdge.first].status = CollisionStatus::FREE;
-      initializeEdgePoints(newEdge.first);
     }
   }
 }
@@ -730,7 +726,8 @@ void LRAstar::rewireLazyBand(TG &qRewire, TF &qExtend, TF &qFrontier)
 // ===========================================================================================
 // Evaluate
 template<class TG, class TF>
-bool LRAstar::evaluatePath(std::vector<Vertex> path, TG &qUpdate, TG &qRewire, TF &qExtend, TF &qFrontier)
+bool LRAstar::evaluatePath(
+  std::vector<Vertex> path, TG &qUpdate, TG &qRewire, TF &qExtend, TF &qFrontier)
 {
   assert(path.size() != 1);
 
@@ -954,7 +951,8 @@ void LRAstar::initializeEdgePoints(const Edge& e)
   auto startState = graph[source(e,graph)].state->state;
   auto endState = graph[target(e,graph)].state->state;
 
-  unsigned int nStates = static_cast<unsigned int>(std::floor(graph[e].length / (2.0*mCheckRadius)));
+  unsigned int nStates = static_cast<unsigned int>(
+                                            std::floor(graph[e].length / (2.0*mCheckRadius)));
   
   // Just start and goal
   if(nStates < 2u)
@@ -983,6 +981,9 @@ bool LRAstar::evaluateEdge(const LRAstar::Edge& e)
 {
   // Log Time
   std::chrono::time_point<std::chrono::system_clock> startEvaluationTime{std::chrono::system_clock::now()};
+
+  // Initialize edge states [just in time]. Useful for large graphs.
+  initializeEdgePoints(e);
 
   // March along edge states with highest resolution
   mNumEdgeEvals++;

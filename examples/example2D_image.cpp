@@ -107,12 +107,12 @@ int main(int argc, char *argv[])
   po::options_description desc("2D Map Planner Options");
   desc.add_options()
       ("help,h", "produce help message")
-      ("type,o", po::value<std::string>()->required(), "one_wall/two_wall")
-      ("index,i", po::value<std::string>()->required(), "world index")
+      ("graph,g", po::value<std::string>()->default_value(""), "Path to Graph")
+      ("obstaclefile,o", po::value<std::string>()->default_value(""), "Path to Obstacles File")
       ("source,s", po::value<std::vector<float> >()->multitoken(), "source configuration")
       ("target,t", po::value<std::vector<float> >()->multitoken(), "target configuration")
       ("lookahead,l", po::value<double>()->default_value(1.0), "Lazy Lookahead")
-      ("display,d", po::bool_switch()->default_value(false), "Display or Save")
+      ("display,d", po::bool_switch()->default_value(true), "Enable to display final path")
   ;
 
   // Read arguments
@@ -127,19 +127,15 @@ int main(int argc, char *argv[])
   }
 
   double lookahead(vm["lookahead"].as<double>());
-  std::string obstacle_type(vm["type"].as<std::string>());
-  std::string obstacle_index(vm["index"].as<std::string>());
+  std::string graph_file(vm["graph"].as<std::string>());
+  if (graph_file == "")
+    graph_file = "src/LRA-star/data/graphs/halton2D.graphml";
+  std::string obstacle_file(vm["obstaclefile"].as<std::string>());
+  if (obstacle_file == "")
+    obstacle_file = "src/LRA-star/data/obstacles/OneWall2D.png";
   std::vector<float> source(vm["source"].as<std::vector< float> >());
   std::vector<float> target(vm["target"].as<std::vector< float> >());
   bool display(vm["display"].as<bool>());
-
-  // Build obstacle location
-  std::string default_obstacle_location = "/home/adityavk/research-ws/src/planning_dataset/sanjiban_data/";
-  std::string obstacle_file = default_obstacle_location + obstacle_type + "/environment_images/world_" + obstacle_index + ".png";
-
-  // Build the graph location
-  std::string default_graph_location = "/home/adityavk/research-ws/src/planning_dataset/sanjiban_data/";
-  std::string graph_file = default_graph_location + obstacle_type + "/graph_priors.graphml";
 
   // Define the state space: R^2
   boost::shared_ptr<ompl::base::RealVectorStateSpace> space(
@@ -150,7 +146,8 @@ int main(int argc, char *argv[])
 
   // Space Information
   cv::Mat image = cv::imread(obstacle_file, 0);
-  std::function<bool(const ompl::base::State*)> isStateValid = std::bind(isPointValid, image, std::placeholders::_1);
+  std::function<bool(const ompl::base::State*)> isStateValid = std::bind(
+                                                    isPointValid, image, std::placeholders::_1);
   ompl::base::SpaceInformationPtr si(new ompl::base::SpaceInformation(space));
   si->setStateValidityChecker(isStateValid);
   si->setup();
