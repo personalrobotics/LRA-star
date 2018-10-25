@@ -1,5 +1,7 @@
 ## Lazy Receding-Horizon A*
 
+Implementation of [LRA*][LRAstar], a lazy search framework that balances edge evaluations with search effort to reduce total planning time. The framework generalizes existing lazy search algorithms [LazySP][lazySP] and [LWA*][LWAstar] using a tunable parameter, lookahead.
+
 Search Algorithm implemented in OMPL, also using Boost Graph Library.
 
 ### Dependencies:
@@ -7,7 +9,7 @@ Search Algorithm implemented in OMPL, also using Boost Graph Library.
 2. cmake
 3. OMPL
 4. Boost Graph Library
-5. OpenCV [optional to display final solution]
+5. OpenCV (optional to display final solution)
 
 The CMakeLists.txt file supports catkin tools. Once you have created and initialized your workspace, 
 you should be able to build the package by running `catkin build LRAstar`.
@@ -36,3 +38,7 @@ The executables expect five command-line arguments that might be of interest:
 From the root folder of the catkin workspace:
 1. `./devel/lib/LRA-star/example2D -s 0.1 0.1 -t 0.9 0.9 -l -1`
 2. `./devel/lib/LRA-star/example2D_image -s 0.1 0.1 -t 0.9 0.9 -l -1`
+
+[LRAstar]: https://personalrobotics.cs.washington.edu/publications/mandalika2018lrastarfull.pdf
+[lazySP]: https://personalrobotics.ri.cmu.edu/files/courses/16843/notes/lazysp/lazysp-2016.pdf
+[LWAstar]: http://www.roboticsproceedings.org/rss10/p33.pdf
