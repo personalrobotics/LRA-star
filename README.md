@@ -7,6 +7,7 @@ Dependencies:
 2. cmake
 3. OMPL
 4. Boost Graph Library
+5. OpenCV [optional to display final solution]
 
 The CMakeLists.txt file supports catkin tools. Once you have created and initialized your workspace, 
 you should be able to build the package by running `catkin build LRAstar`.
@@ -16,15 +17,21 @@ The planner returns the shortest path on the roadmap graph it is planning on.
 
 ------
 
-Example:
+Examples:
 The executables [`example2D`, `example2D_image`] can be found under `devel/lib/LRA-star/`.
-The executables expect three command-line arguments that might be of interest:
+The executables expect five command-line arguments that might be of interest:
 1. Path to graph 
-	`example2D` defaults to data/graphs/halton.graphml
-	`example2D_image` defaults to data/graphs/halton.graphml
+	`example2D` defaults to data/graphs/halton2D.graphml
+	`example2D_image` defaults to data/graphs/halton2D.graphml
 2. Path to obstacle
 	`example2D` defaults to data/obstacles/Forest2D.txt (requires text format)
-	`example2D_image` defaults to data/obstacles/one_wall.png (requires image format)
+	`example2D_image` defaults to data/obstacles/OneWall2D.png (requires image format)
 3. Lookahead
 	Set to 1 for LWA*
 	Set to -1 for LazySP
+	Set to any integer value for LRA* with lookahead
+4. Source and Target (2D) between 0 and 1.
+
+From the root folder of the catkin workspace:
+1. `./devel/lib/LRA-star/example2D -s 0.1 0.1 -t 0.9 0.9 -l -1`
+2. `./devel/lib/LRA-star/example2D_image -s 0.1 0.1 -t 0.9 0.9 -l -1`
