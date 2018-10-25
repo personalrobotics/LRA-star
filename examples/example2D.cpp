@@ -60,12 +60,14 @@ int main(int argc, char *argv[])
   po::options_description desc("2D Map Planner Options");
   desc.add_options()
       ("help,h", "produce help message")
-      ("roadmapfile,f", po::value<std::string>()->required(), "Path to Graph")
+      ("graph,g", po::value<std::string>()->required(), "Path to Graph")
       ("obstaclefile,o", po::value<std::string>()->required(), "Path to Obstacles File")
+      ("shortestPathFile,p",po::value<std::string>()->default_value(""), "Path to Shortest Paths Log")
+      ("lazySearchTreeFile,b",po::value<std::string>()->default_value(""), "Path to Lazy Search Tree Log")
+      ("edgeEvaluationsFile,e",po::value<std::string>()->default_value(""), "Path to Edge Evaluations Log")
       ("source,s", po::value<std::vector<float> >()->multitoken(), "source configuration")
       ("target,t", po::value<std::vector<float> >()->multitoken(), "target configuration")
       ("lookahead,l", po::value<double>()->default_value(1.0), "Lazy Lookahead")
-      ("greediness,g", po::value<double>()->default_value(1.0), "Greediness")
   ;
 
   // Read arguments
@@ -80,9 +82,11 @@ int main(int argc, char *argv[])
   }
 
   double lookahead(vm["lookahead"].as<double>());
-  double greediness(vm["greediness"].as<double>());
-  std::string graph_file(vm["roadmapfile"].as<std::string>());
+  std::string graph_file(vm["graph"].as<std::string>());
   std::string obstacle_file(vm["obstaclefile"].as<std::string>());
+  std::string sp_file(vm["shortestPathFile"].as<std::string>());
+  std::string lst_file(vm["lazySearchTreeFile"].as<std::string>());
+  std::string ee_file(vm["edgeEvaluationsFile"].as<std::string>());
   std::vector<float> source(vm["source"].as<std::vector< float> >());
   std::vector<float> target(vm["target"].as<std::vector< float> >());
 
@@ -104,7 +108,10 @@ int main(int argc, char *argv[])
   pdef->setGoalState(make_state(space, target[0], target[1]));
 
   // Setup planner
-  LRAstar::LRAstar planner(si, graph_file, lookahead, greediness);
+  LRAstar::LRAstar planner(si, graph_file, lookahead);
+  planner.setShortestPathFileName(sp_file);
+  planner.setLazySearchTreeFileName(lst_file);
+  planner.setEdgeEvaluationsFileName(ee_file);
   planner.setup();
   planner.setProblemDefinition(pdef);
 
@@ -116,8 +123,14 @@ int main(int argc, char *argv[])
   if(status == ompl::base::PlannerStatus::EXACT_SOLUTION)
   {
     // Get planner data if required
+    std::ofstream logFile;
+    logFile.open("/home/adityavk/research-ws/src/planning_dataset/results/forward/search/plannerData.txt", std::ios_base::app);
+    logFile << graph_file << std::endl;
+    logFile << obstacle_file << std::endl;
+    logFile << planner.getLookahead() << " " << planner.getBestPathCost() << " " 
+            << planner.getNumEdgeEvaluations() << " " << planner.getNumEdgeRewires() << " "
+            << planner.getEdgeEvaluationsTime() << " " << planner.getSearchTime() << std::endl;
     return 0;
   }
-
   return 0;
 }

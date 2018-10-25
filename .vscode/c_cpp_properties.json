@@ -1,0 +1,23 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "",
+        "limitSymbolsToIncludedHeaders": true
+      },
+      "includePath": [
+        "/home/adityavk/research-ws/devel/include",
+        "/opt/ros/indigo/include",
+        "/home/adityavk/research-ws/src/LRAstar/include",
+        "/home/adityavk/research-ws/src/aikido/include",
+        "/home/adityavk/research-ws/src/libada/include",
+        "/home/adityavk/research-ws/src/libherb/include",
+        "/home/adityavk/research-ws/src/magi/include",
+        "/home/adityavk/research-ws/src/pr_tsr/include",
+        "/home/adityavk/research-ws/src/schunk_neck/include",
+        "/usr/include"
+      ],
+      "name": "Linux"
+    }
+  ]
+}

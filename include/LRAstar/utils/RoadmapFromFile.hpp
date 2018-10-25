@@ -112,8 +112,46 @@ put(const RoadmapFromFilePutEdgeLengthMap<PropMap> &map,
   put(map.mPropMap, k, stod(representation));
 }
 
+/* RoadmapFromFilePutEdgePriorMap */
+/// The map used to decode the .graphml file and populate the edge priors
+/// \tparam PropMap The type of property map for edge prior
+template <class PropMap>
+class RoadmapFromFilePutEdgePriorMap
+{
+public:
+  typedef boost::writable_property_map_tag category;
+  typedef typename boost::property_traits<PropMap>::key_type key_type;
+  typedef std::string value_type;
+  typedef std::string reference;
+  const PropMap mPropMap;
+
+  RoadmapFromFilePutEdgePriorMap(PropMap propMap):
+    mPropMap(propMap)
+  {
+  }
+};
+
+/// Do not allow calling get on this property map
+template <class PropMap>
+inline std::string
+get(const RoadmapFromFilePutEdgePriorMap<PropMap> &map,
+  const typename RoadmapFromFilePutEdgePriorMap<PropMap>::key_type &k)
+{
+  abort();
+}
+
+template <class PropMap>
+inline void
+put(const RoadmapFromFilePutEdgePriorMap<PropMap> &map,
+  const typename RoadmapFromFilePutEdgePriorMap<PropMap>::key_type &k,
+  const std::string representation)
+{
+  put(map.mPropMap, k, stod(representation));
+}
+
+
 /* RoadmapFromFile */
-template <class Graph, class VStateMap, class StateWrapper, class ELength>
+template <class Graph, class VStateMap, class StateWrapper, class ELength, class EPrior>
 class RoadmapFromFile
 {
   typedef boost::graph_traits<Graph> GraphTypes;
@@ -141,11 +179,12 @@ class RoadmapFromFile
 
     ~RoadmapFromFile() {}
 
-    void generate(Graph &g, VStateMap stateMap, ELength lengthMap)
+    void generate(Graph &g, VStateMap stateMap, ELength lengthMap, EPrior priorMap)
     {
       boost::dynamic_properties props;
       props.property("state", RoadmapFromFilePutStateMap<VStateMap, StateWrapper>(stateMap, mSpace, mDim));
       props.property("length", RoadmapFromFilePutEdgeLengthMap<ELength>(lengthMap));
+      props.property("prior", RoadmapFromFilePutEdgePriorMap<EPrior>(priorMap));
 
       std::ifstream fp;
       fp.open(mFilename.c_str());

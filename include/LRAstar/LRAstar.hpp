@@ -45,8 +45,7 @@ public:
   /// \param[in] greediness The greediness to evaluate lazy shortest paths. Default is 1.
   LRAstar(const ompl::base::SpaceInformationPtr &si,
           const std::string& roadmapFileName,
-          double lookahead,
-          double greediness);
+          double lookahead);
 
   /// Destructor
   ~LRAstar(void);
@@ -112,6 +111,9 @@ public:
     /// Collision status
     CollisionStatus status;
 
+    /// Prior over existence of edge
+    double prior;
+
   }; // struct EProp
 
   ///////////////////////////////////////////////////////////////////
@@ -149,6 +151,9 @@ public:
   /// Map each edge to its length
   typedef boost::property_map<Graph, double EProp::*>::type EPLengthMap;
 
+  /// Map each edge to its existence prior
+  typedef boost::property_map<Graph, double EProp::*>::type EPPriorMap;
+
   /// Unordered set of graph vertices to track the lazy band.
   struct HashFunction
   {
@@ -167,26 +172,26 @@ public:
   /// Set value of lazy lookahead.
   void setLookahead(double lookahead);
 
-  /// Set value of greediness.
-  void setGreediness(double greediness);
-
   /// Set roadmap information.
   void setRoadmapFileName(const std::string& roadmapFileName);
 
   /// Set connection radius
   void setConnectionRadius(double connectionRadius);
 
+  /// Set collision checking radius
+  void setCheckRadius(double checkRadius);
+
   /// Get value of lazy lookahead.
   double getLookahead() const;
-
-  /// Get value of greediness
-  double getGreediness() const;
 
   /// Get roadmap information.
   std::string getRoadmapFileName() const;
 
   /// Get connection radius used to generate the graph.
   double getConnectionRadius() const;
+
+  /// Get resolution of collision checking.
+  double getCheckRadius() const;
 
   /// Get ID of start vertex.
   Vertex getStartVertex() const;
@@ -197,16 +202,35 @@ public:
   /// Get the shortest path cost.
   double getBestPathCost() const;
 
+  // Internal Evaluation Functions
+  /// Set FilePath
+  void setShortestPathFileName(std::string name);
+
+  /// Set FilePath
+  void setLazySearchTreeFileName(std::string name);
+
+  /// set FilePath
+  void setEdgeEvaluationsFileName(std::string name);
+
+  /// set FilePath
+  void setFrontierNodeDataFileName(std::string name);
+
   ///////////////////////////////////////////////////////////////////
 
   ///////////////////////////////////////////////////////////////////
 
   // Internal evaluation methods
   /// Number of edges evaluated thus far.
-  std::size_t getNumEdgeEvals() const;
+  std::size_t getNumEdgeEvaluations() const;
 
   /// Number of edges rewired thus far.
   std::size_t getNumEdgeRewires() const;
+
+  /// Time for edge evaluations.
+  double getEdgeEvaluationsTime() const;
+
+  /// Time for search.
+  double getSearchTime() const;
 
   ///////////////////////////////////////////////////////////////////
 
@@ -234,13 +258,10 @@ private:
   Graph graph;
 
   /// Roadmap
-  boost::shared_ptr<utils::RoadmapFromFile<Graph, VPStateMap, utils::StateWrapper, EPLengthMap>> roadmapPtr;
+  boost::shared_ptr<utils::RoadmapFromFile<Graph, VPStateMap, utils::StateWrapper, EPLengthMap, EPPriorMap>> roadmapPtr;
 
   /// Lookahead.
   double mLookahead;
-
-  /// Greediness.
-  double mGreediness;
 
   /// Path to the roadmap.
   std::string mRoadmapFileName;
@@ -259,11 +280,53 @@ private:
   /// Number of edges evaluated.
   std::size_t mNumEdgeEvals{0u};
 
+  /// Time for edge evaluations
+  double mEdgeEvaluationsTime;
+
   /// Number of edges rewired.
   std::size_t mNumEdgeRewires{0u};
 
+  /// Time for search
+  double mSearchTime;
+
+  /// Time for logging
+  double mLogTime{0};
+
   /// Cost of optimal path.
   double mBestPathCost{std::numeric_limits<double>::infinity()};
+
+  /// Track iterations
+  std::size_t mIteration{0u};
+
+  /// Filename for logging shortest paths
+  std::string mShortestPathsFileName;
+
+  /// Filename for logging lazy search tree
+  std::string mLazySearchTreeFileName;
+
+  /// Filename for logging edge evaluations
+  std::string mEdgeEvaluationsFileName;
+
+  /// Filename for logging edge evaluations
+  std::string mFrontierNodeDataFileName;
+
+  ///////////////////////////////////////////////////////////////////
+
+  ///////////////////////////////////////////////////////////////////
+
+  // Internal evaluation functions
+  /// Log the shortest path
+  void logPath(std::vector<Vertex> path);
+
+  /// Log the lazy search tree
+  void logLazySearchTree();
+
+  /// Log edge evaluation
+  void logEdgeEvaluation(Vertex u, Vertex v, int result);
+
+  /// Log qFrontier nodes data
+  template<class TF>
+  void logFrontierNodeData(TF &qFrontier);
 
   ///////////////////////////////////////////////////////////////////
 
@@ -298,6 +361,11 @@ private:
   /// \param[in] The edge ID to check for
   /// \return True if edge is valid
   bool evaluateEdge(const Edge& e);
+
+  /// Return the edge between the two vertices
+  /// \param[in] source Source vertex
+  /// \param[in] target Target vertex
+  Edge getEdge(Vertex u, Vertex v) const;
 
   /// Returns g-value of vertex.
   /// \param[in] vertex Vertex
