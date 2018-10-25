@@ -21,15 +21,15 @@ The planner returns the shortest path on the roadmap graph it is planning on.
 The executables [`example2D`, `example2D_image`] can be found under `devel/lib/LRA-star/`.
 The executables expect five command-line arguments that might be of interest:
 1. Path to graph (-g option) 
-	`example2D` defaults to data/graphs/halton2D.graphml
-	`example2D_image` defaults to data/graphs/halton2D.graphml
+	- `example2D` defaults to data/graphs/halton2D.graphml
+	- `example2D_image` defaults to data/graphs/halton2D.graphml
 2. Path to obstacle (-o option) 
-	`example2D` defaults to data/obstacles/Forest2D.txt (requires text format)
-	`example2D_image` defaults to data/obstacles/OneWall2D.png (requires image format)
+	- `example2D` defaults to data/obstacles/Forest2D.txt (requires text format)
+	- `example2D_image` defaults to data/obstacles/OneWall2D.png (requires image format)
 3. Lookahead (-l option) 
-	Set to 1 for LWA*
-	Set to -1 for LazySP
-	Set to any integer value for LRA* with lookahead
+	- Set to 1 for LWA*
+	- Set to -1 for LazySP
+	- Set to any integer value for LRA* with lookahead
 4. Source (2D) between 0 and 1 (-s option) 
 5. Target (2D) between 0 and 1 (-t option) 
 
